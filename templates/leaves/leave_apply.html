@@ -1,0 +1,222 @@
+{% extends 'base.html' %}
+
+{% block title %}Apply for Leave &mdash; Smart HRMS{% endblock %}
+{% block page_title %}Submit Leave Application{% endblock %}
+
+{% block content %}
+<div class="row g-4">
+    <!-- Left Column: Leave Application Form -->
+    <div class="col-12 col-lg-8">
+        <div class="card card-stat p-4">
+            <div class="d-flex align-items-center gap-2 mb-3">
+                <i class="bi bi-pencil-square fs-4 text-primary"></i>
+                <h5 class="fw-bold mb-0 text-dark">Leave Application Request</h5>
+            </div>
+            <p class="text-muted small mb-4">
+                Working days are computed automatically based on your company's holiday calendar. Scheduled weekly offs and mandatory holidays are excluded from your quota deduction.
+            </p>
+
+            <form method="post" enctype="multipart/form-data" id="leaveApplicationForm">
+                {% csrf_token %}
+
+                {% if form.non_field_errors %}
+                <div class="alert alert-danger py-2">
+                    {% for error in form.non_field_errors %}
+                        <div><i class="bi bi-exclamation-triangle-fill me-1"></i> {{ error }}</div>
+                    {% endfor %}
+                </div>
+                {% endif %}
+
+                <div class="mb-3">
+                    <label for="id_leave_type" class="form-label fw-semibold">Leave Category <span class="text-danger">*</span></label>
+                    {{ form.leave_type }}
+                    {% if form.leave_type.errors %}
+                        <div class="text-danger small mt-1">{{ form.leave_type.errors }}</div>
+                    {% endif %}
+                </div>
+
+                <div class="row g-3 mb-3">
+                    <div class="col-md-6">
+                        <label for="id_start_date" class="form-label fw-semibold">Start Date <span class="text-danger">*</span></label>
+                        {{ form.start_date }}
+                        {% if form.start_date.errors %}
+                            <div class="text-danger small mt-1">{{ form.start_date.errors }}</div>
+                        {% endif %}
+                    </div>
+                    <div class="col-md-6" id="endDateWrapper">
+                        <label for="id_end_date" class="form-label fw-semibold">End Date <span class="text-danger">*</span></label>
+                        {{ form.end_date }}
+                        {% if form.end_date.errors %}
+                            <div class="text-danger small mt-1">{{ form.end_date.errors }}</div>
+                        {% endif %}
+                    </div>
+                </div>
+
+                <div class="card bg-light p-3 border mb-3">
+                    <div class="form-check form-switch mb-2">
+                        {{ form.is_half_day }}
+                        <label class="form-check-label fw-semibold" for="id_is_half_day">Apply as Half-Day Leave (0.5 Day)</label>
+                    </div>
+                    <div id="halfDaySessionWrapper" class="d-none mt-2">
+                        <label for="id_half_day_session" class="form-label small fw-semibold">Select Shift Session</label>
+                        {{ form.half_day_session }}
+                        {% if form.half_day_session.errors %}
+                            <div class="text-danger small mt-1">{{ form.half_day_session.errors }}</div>
+                        {% endif %}
+                    </div>
+                </div>
+
+                <!-- Dynamic Calculation Preview Alert -->
+                <div id="liveCalcAlert" class="alert alert-info d-flex align-items-center gap-2 d-none py-2 mb-3">
+                    <i class="bi bi-calculator fs-5"></i>
+                    <div id="liveCalcMessage" class="small">Calculating working days...</div>
+                </div>
+
+                <div class="mb-3">
+                    <label for="id_reason" class="form-label fw-semibold">Reason for Leave <span class="text-danger">*</span></label>
+                    {{ form.reason }}
+                    {% if form.reason.errors %}
+                        <div class="text-danger small mt-1">{{ form.reason.errors }}</div>
+                    {% endif %}
+                </div>
+
+                <div class="mb-4">
+                    <label for="id_attachment" class="form-label fw-semibold">Supporting Document (Optional / Medical)</label>
+                    {{ form.attachment }}
+                    <small class="text-muted d-block mt-1">Upload doctor note or travel tickets if required by policy (PDF, JPG, PNG).</small>
+                    {% if form.attachment.errors %}
+                        <div class="text-danger small mt-1">{{ form.attachment.errors }}</div>
+                    {% endif %}
+                </div>
+
+                <div class="d-flex justify-content-between align-items-center pt-2 border-top">
+                    <a href="{% url 'leaves:dashboard' %}" class="btn btn-outline-secondary">
+                        <i class="bi bi-arrow-left me-1"></i> Cancel
+                    </a>
+                    <button type="submit" class="btn btn-primary px-4 shadow-sm" id="submitBtn">
+                        <i class="bi bi-send me-1"></i> Submit Application
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Right Column: Current Balances Sidebar -->
+    <div class="col-12 col-lg-4">
+        <div class="card card-stat p-3 mb-3">
+            <h6 class="fw-bold text-dark mb-3">
+                <i class="bi bi-wallet2 text-primary me-2"></i> Your Leave Balances
+            </h6>
+            <div class="list-group list-group-flush">
+                {% for bal in balances %}
+                <div class="list-group-item px-0 py-2 d-flex justify-content-between align-items-center">
+                    <div>
+                        <div class="fw-bold text-dark small">{{ bal.leave_type.name }} ({{ bal.leave_type.code }})</div>
+                        <div class="text-muted" style="font-size: 0.75rem;">
+                            Alloc: {{ bal.allocated_days }} | Used: {{ bal.used_days }} | Pend: {{ bal.pending_days }}
+                        </div>
+                    </div>
+                    <span class="badge {% if bal.available_days > 0 %}bg-success{% else %}bg-secondary{% endif %} rounded-pill px-2 py-1">
+                        {{ bal.available_days }} Avail
+                    </span>
+                </div>
+                {% empty %}
+                <div class="text-muted small py-2">No active balances found.</div>
+                {% endfor %}
+            </div>
+        </div>
+
+        <div class="card card-stat p-3 bg-light border">
+            <h6 class="fw-bold text-dark small mb-2"><i class="bi bi-shield-check text-success me-1"></i> Corporate Policy Rules</h6>
+            <ul class="small text-muted mb-0 ps-3">
+                <li class="mb-1">Weekends and company public holidays are never charged to your leave balance.</li>
+                <li class="mb-1">Half-day leaves are equivalent to exactly 0.50 working days.</li>
+                <li class="mb-1">Submitting a request temporarily locks days as <em>Pending</em> until reviewed.</li>
+                <li>Managers and HR Admins receive notification for fast turnaround.</li>
+            </ul>
+        </div>
+    </div>
+</div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const isHalfDayCheckbox = document.getElementById('id_is_half_day');
+    const halfDaySessionWrapper = document.getElementById('halfDaySessionWrapper');
+    const endDateWrapper = document.getElementById('endDateWrapper');
+    const startDateInput = document.getElementById('id_start_date');
+    const endDateInput = document.getElementById('id_end_date');
+    const leaveTypeSelect = document.getElementById('id_leave_type');
+    const liveCalcAlert = document.getElementById('liveCalcAlert');
+    const liveCalcMessage = document.getElementById('liveCalcMessage');
+    const submitBtn = document.getElementById('submitBtn');
+
+    function toggleHalfDay() {
+        if (isHalfDayCheckbox.checked) {
+            halfDaySessionWrapper.classList.remove('d-none');
+            endDateWrapper.classList.add('d-none');
+            endDateInput.value = startDateInput.value;
+        } else {
+            halfDaySessionWrapper.classList.add('d-none');
+            endDateWrapper.classList.remove('d-none');
+        }
+        calculateDays();
+    }
+
+    function calculateDays() {
+        const startDate = startDateInput.value;
+        const endDate = isHalfDayCheckbox.checked ? startDate : endDateInput.value;
+        const isHalfDay = isHalfDayCheckbox.checked;
+        const leaveTypeId = leaveTypeSelect.value;
+
+        if (!startDate) {
+            liveCalcAlert.classList.add('d-none');
+            return;
+        }
+
+        const url = `{% url 'leaves:api_calculate_days' %}?start_date=${startDate}&end_date=${endDate}&is_half_day=${isHalfDay}&leave_type_id=${leaveTypeId}`;
+
+        fetch(url)
+            .then(res => res.json())
+            .then(data => {
+                if (data.success) {
+                    liveCalcAlert.classList.remove('d-none', 'alert-danger', 'alert-info', 'alert-warning');
+
+                    if (data.warning) {
+                        liveCalcAlert.classList.add('alert-warning');
+                        liveCalcMessage.innerHTML = `<i class="bi bi-exclamation-circle me-1"></i> ${data.warning}`;
+                        submitBtn.disabled = true;
+                    } else if (data.net_days <= 0) {
+                        liveCalcAlert.classList.add('alert-warning');
+                        liveCalcMessage.innerHTML = `<i class="bi bi-calendar-x me-1"></i> Selected range contains <strong>0 working days</strong> (all dates are weekends or public holidays).`;
+                        submitBtn.disabled = true;
+                    } else if (leaveTypeId && !data.has_sufficient_balance) {
+                        liveCalcAlert.classList.add('alert-danger');
+                        liveCalcMessage.innerHTML = `<i class="bi bi-x-circle me-1"></i> Net working days: <strong>${data.net_days}</strong>. Available balance: <strong>${data.available_days}</strong>. <span class="fw-bold">Insufficient balance!</span>`;
+                        submitBtn.disabled = true;
+                    } else {
+                        liveCalcAlert.classList.add('alert-info');
+                        liveCalcMessage.innerHTML = `<i class="bi bi-check-circle me-1"></i> Net working days to be deducted: <strong>${data.net_days} day(s)</strong> (Available: ${data.available_days} days).`;
+                        submitBtn.disabled = false;
+                    }
+                }
+            })
+            .catch(() => {
+                liveCalcAlert.classList.add('d-none');
+            });
+    }
+
+    isHalfDayCheckbox.addEventListener('change', toggleHalfDay);
+    startDateInput.addEventListener('change', () => {
+        if (isHalfDayCheckbox.checked) {
+            endDateInput.value = startDateInput.value;
+        }
+        calculateDays();
+    });
+    endDateInput.addEventListener('change', calculateDays);
+    leaveTypeSelect.addEventListener('change', calculateDays);
+
+    // Initial check
+    toggleHalfDay();
+});
+</script>
+{% endblock %}

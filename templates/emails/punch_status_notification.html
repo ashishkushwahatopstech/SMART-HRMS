@@ -1,0 +1,81 @@
+{% extends 'emails/base_email.html' %}
+
+{% block email_title %}Missed Punch Regularization {{ status_display }} &mdash; Smart HRMS{% endblock %}
+{% block preheader %}Your attendance regularization for {{ punch_request.date|date:"d M Y" }} has been {{ status_display }}.{% endblock %}
+
+{% block header_badge %}
+{% if status == 'approved' %}
+<span style="background-color: rgba(16, 185, 129, 0.2); color: #34d399; font-size: 11px; font-weight: 600; padding: 4px 10px; border-radius: 20px; letter-spacing: 0.5px; text-transform: uppercase;">
+    Approved
+</span>
+{% else %}
+<span style="background-color: rgba(239, 68, 68, 0.2); color: #f87171; font-size: 11px; font-weight: 600; padding: 4px 10px; border-radius: 20px; letter-spacing: 0.5px; text-transform: uppercase;">
+    Rejected
+</span>
+{% endif %}
+{% endblock %}
+
+{% block content %}
+<div style="margin-bottom: 20px;">
+    <h1 style="font-size: 22px; font-weight: 700; color: #0f172a; margin: 0 0 8px 0; letter-spacing: -0.3px;">
+        Attendance Regularization {{ status_display }}
+    </h1>
+    <p style="font-size: 15px; color: #475569; margin: 0; line-height: 1.6;">
+        Hello <strong>{{ employee.get_full_name }}</strong>,
+    </p>
+    <p style="font-size: 15px; color: #475569; margin: 8px 0 0 0; line-height: 1.6;">
+        Your missed punch regularization request for <strong>{{ punch_request.date|date:"d F Y" }}</strong> has been reviewed.
+    </p>
+</div>
+
+{% if status == 'approved' %}
+<div style="background-color: #f0fdf4; border: 1px solid #bbf7d0; border-radius: 8px; padding: 16px 20px; margin: 20px 0;">
+    <div style="font-size: 14px; font-weight: 700; color: #166534; margin-bottom: 4px;">
+        ✓ Regularization Approved
+    </div>
+    <div style="font-size: 13px; color: #15803d; line-height: 1.5;">
+        Your attendance record for this date has been officially registered with recalculated working hours and overtime.
+    </div>
+</div>
+{% else %}
+<div style="background-color: #fef2f2; border: 1px solid #fecaca; border-radius: 8px; padding: 16px 20px; margin: 20px 0;">
+    <div style="font-size: 14px; font-weight: 700; color: #991b1b; margin-bottom: 4px;">
+        ✗ Regularization Rejected
+    </div>
+    <div style="font-size: 13px; color: #b91c1c; line-height: 1.5;">
+        Your regularization request was not approved by management.
+    </div>
+</div>
+{% endif %}
+
+<div style="background-color: #f8fafc; border: 1px solid #e2e8f0; border-radius: 10px; padding: 20px; margin: 20px 0;">
+    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="font-size: 14px; line-height: 1.6;">
+        <tr>
+            <td style="padding: 5px 0; color: #64748b; width: 140px;">Missed Date:</td>
+            <td style="padding: 5px 0; color: #0f172a; font-weight: 600;">
+                {{ punch_request.date|date:"d M Y" }}
+            </td>
+        </tr>
+        <tr>
+            <td style="padding: 5px 0; color: #64748b;">Punch Scope:</td>
+            <td style="padding: 5px 0; color: #0f172a;">
+                {{ punch_request.get_punch_type_display }}
+            </td>
+        </tr>
+        {% if remarks %}
+        <tr>
+            <td style="padding: 5px 0; color: #64748b; vertical-align: top;">Review Remarks:</td>
+            <td style="padding: 5px 0; color: #334155; font-style: italic;">
+                "{{ remarks }}"
+            </td>
+        </tr>
+        {% endif %}
+    </table>
+</div>
+
+<div style="text-align: center; margin: 28px 0 20px 0;">
+    <a href="{{ detail_url }}" style="background-color: #4f46e5; color: #ffffff; text-decoration: none; padding: 12px 28px; border-radius: 8px; font-weight: 600; font-size: 14px; display: inline-block;">
+        View My Attendance &rarr;
+    </a>
+</div>
+{% endblock %}

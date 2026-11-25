@@ -1,0 +1,205 @@
+{% extends 'base.html' %}
+
+{% block title %}Departments &mdash; Smart HRMS{% endblock %}
+{% block page_title %}Department & Designation Management{% endblock %}
+
+{% block content %}
+<!-- Unified Navigation Tabs -->
+<ul class="nav nav-pills mb-4 gap-2">
+    <li class="nav-item">
+        <a class="nav-link active fw-semibold shadow-sm" href="{% url 'employees:departments' %}">
+            <i class="bi bi-diagram-3-fill me-1"></i> Departments ({{ departments|length }})
+        </a>
+    </li>
+    <li class="nav-item">
+        <a class="nav-link fw-semibold bg-white border text-dark" href="{% url 'employees:designations' %}">
+            <i class="bi bi-award-fill text-primary me-1"></i> Designations ({{ total_designations }})
+        </a>
+    </li>
+</ul>
+
+<div class="row g-4">
+    <!-- Left Column: Department List with Designations -->
+    <div class="col-lg-8">
+        <div class="card card-stat p-3 p-sm-4">
+            <div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
+                <div>
+                    <h5 class="fw-bold text-dark mb-0">
+                        <i class="bi bi-diagram-3-fill text-primary me-2"></i> Company Departments
+                    </h5>
+                    <div class="text-muted small">Manage organizational divisions and their job designations</div>
+                </div>
+                <div class="d-flex align-items-center gap-2">
+                    <span class="badge bg-light text-dark border">{{ departments|length }} Departments</span>
+                    <a href="{% url 'employees:designations' %}" class="btn btn-outline-primary btn-sm">
+                        <i class="bi bi-award me-1"></i> All Designations &rarr;
+                    </a>
+                </div>
+            </div>
+
+            <div class="table-responsive">
+                <table class="table table-hover align-middle mb-0 small">
+                    <thead class="table-light text-muted text-uppercase">
+                        <tr>
+                            <th>Department</th>
+                            <th>Code</th>
+                            <th>Company</th>
+                            <th style="min-width: 180px;">Designations</th>
+                            <th>Staff</th>
+                            <th class="text-end">Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for dept in departments %}
+                        <tr>
+                            <td class="fw-bold text-dark">
+                                {{ dept.name }}
+                                {% if dept.description %}
+                                    <div class="text-muted fw-normal" style="font-size: 0.75rem;">{{ dept.description }}</div>
+                                {% endif %}
+                            </td>
+                            <td><span class="badge bg-light text-dark border font-monospace">{{ dept.code|default:"-" }}</span></td>
+                            <td><span class="badge bg-primary-subtle text-primary">{{ dept.company.code }}</span></td>
+                            <td>
+                                <div class="d-flex flex-wrap gap-1 align-items-center">
+                                    {% for desig in dept.designations.all %}
+                                        <span class="badge bg-light text-dark border" style="font-size: 0.72rem;">{{ desig.title }}</span>
+                                    {% empty %}
+                                        <span class="text-muted small fst-italic">No designations yet</span>
+                                    {% endfor %}
+                                </div>
+                            </td>
+                            <td>
+                                <span class="badge bg-success-subtle text-success">{{ dept.employee_count }} Staff</span>
+                            </td>
+                            <td class="text-end text-nowrap">
+                                <button type="button" class="btn btn-primary btn-sm shadow-sm btn-add-desig" 
+                                        data-bs-toggle="modal" data-bs-target="#addDesignationModal"
+                                        data-dept-id="{{ dept.id }}" data-dept-name="{{ dept.name }}" data-company-id="{{ dept.company.id }}">
+                                    <i class="bi bi-plus-circle me-1"></i> Add Designation
+                                </button>
+                                <a href="{% url 'employees:designations' %}?department={{ dept.id }}" class="btn btn-light btn-sm border ms-1" title="Filter and view designations in this department">
+                                    <i class="bi bi-eye"></i>
+                                </a>
+                            </td>
+                        </tr>
+                        {% empty %}
+                        <tr>
+                            <td colspan="6" class="text-center py-4 text-muted">No departments configured yet. Use the form to create your first department.</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <!-- Right Column: Quick Add Department Form -->
+    <div class="col-lg-4">
+        <div class="card card-stat p-3 p-sm-4">
+            <h5 class="fw-bold text-dark mb-1">
+                <i class="bi bi-plus-circle text-primary me-2"></i> Create Department
+            </h5>
+            <p class="text-muted small mb-3">Add a new operational division to your organization</p>
+
+            <form method="post">
+                {% csrf_token %}
+                <div class="mb-3">
+                    <label for="{{ form.company.id_for_label }}" class="form-label fw-semibold small">Company <span class="text-danger">*</span></label>
+                    {{ form.company }}
+                    {% if form.company.errors %}<div class="text-danger small mt-1">{{ form.company.errors.0 }}</div>{% endif %}
+                </div>
+                <div class="mb-3">
+                    <label for="{{ form.name.id_for_label }}" class="form-label fw-semibold small">Department Name <span class="text-danger">*</span></label>
+                    {{ form.name }}
+                    {% if form.name.errors %}<div class="text-danger small mt-1">{{ form.name.errors.0 }}</div>{% endif %}
+                </div>
+                <div class="mb-3">
+                    <label for="{{ form.code.id_for_label }}" class="form-label fw-semibold small">Department Code</label>
+                    {{ form.code }}
+                    <div class="form-text small">e.g. IT, HR, FIN, ENG</div>
+                </div>
+                <div class="mb-4">
+                    <label for="{{ form.description.id_for_label }}" class="form-label fw-semibold small">Description</label>
+                    {{ form.description }}
+                </div>
+                <button type="submit" class="btn btn-primary w-100 shadow-sm py-2">
+                    <i class="bi bi-check2 me-1"></i> Add Department
+                </button>
+            </form>
+        </div>
+    </div>
+</div>
+
+<!-- Modal: Quick Add Designation for Department -->
+<div class="modal fade" id="addDesignationModal" tabindex="-1" aria-labelledby="addDesignationModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content border-0 shadow">
+            <div class="modal-header bg-light">
+                <h6 class="modal-title fw-bold text-dark" id="addDesignationModalLabel">
+                    <i class="bi bi-award text-primary me-2"></i> Add Designation to <span id="modalDeptName" class="text-primary">Department</span>
+                </h6>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <form method="post" action="{% url 'employees:designations' %}">
+                {% csrf_token %}
+                <input type="hidden" name="return_to" value="departments">
+                <input type="hidden" name="company" id="modalCompanyInput" value="">
+                <input type="hidden" name="department" id="modalDeptInput" value="">
+
+                <div class="modal-body p-4">
+                    <div class="mb-3">
+                        <label class="form-label fw-semibold small">Department</label>
+                        <input type="text" class="form-control bg-light" id="modalDeptDisplay" readonly>
+                    </div>
+                    <div class="mb-3">
+                        <label for="modalTitleInput" class="form-label fw-semibold small">Designation Title <span class="text-danger">*</span></label>
+                        <input type="text" name="title" id="modalTitleInput" class="form-control" placeholder="e.g. Senior Software Engineer" required>
+                        <div class="form-text small">Job title or role within this department</div>
+                    </div>
+                    <div class="mb-2">
+                        <label for="modalDescInput" class="form-label fw-semibold small">Responsibilities / Description</label>
+                        <textarea name="description" id="modalDescInput" class="form-control" rows="2" placeholder="Key responsibilities and scope..."></textarea>
+                    </div>
+                </div>
+                <div class="modal-footer bg-light">
+                    <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancel</button>
+                    <button type="submit" class="btn btn-primary shadow-sm">
+                        <i class="bi bi-check2 me-1"></i> Create Designation
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function () {
+    const modalEl = document.getElementById('addDesignationModal');
+    if (modalEl) {
+        modalEl.addEventListener('show.bs.modal', function (event) {
+            const button = event.relatedTarget;
+            if (!button) return;
+            const deptId = button.getAttribute('data-dept-id');
+            const deptName = button.getAttribute('data-dept-name');
+            const companyId = button.getAttribute('data-company-id');
+
+            const nameSpan = document.getElementById('modalDeptName');
+            const displayInput = document.getElementById('modalDeptDisplay');
+            const deptInput = document.getElementById('modalDeptInput');
+            const companyInput = document.getElementById('modalCompanyInput');
+            const titleInput = document.getElementById('modalTitleInput');
+
+            if (nameSpan) nameSpan.textContent = deptName;
+            if (displayInput) displayInput.value = deptName;
+            if (deptInput) deptInput.value = deptId;
+            if (companyInput) companyInput.value = companyId;
+
+            setTimeout(() => {
+                if (titleInput) titleInput.focus();
+            }, 300);
+        });
+    }
+});
+</script>
+{% endblock %}

@@ -1,0 +1,96 @@
+{% extends 'base.html' %}
+
+{% block title %}{{ title }} &mdash; Smart HRMS{% endblock %}
+{% block page_title %}{{ title }}{% endblock %}
+
+{% block content %}
+<div class="row justify-content-center">
+    <div class="col-12 col-md-8 col-lg-7">
+        <div class="card card-stat p-4">
+            <h5 class="fw-bold mb-3 text-dark">{{ title }}</h5>
+
+            <form method="post">
+                {% csrf_token %}
+
+                {% if form.company.is_hidden %}
+                    {{ form.company }}
+                {% else %}
+                    <div class="mb-3">
+                        <label class="form-label fw-semibold">Company</label>
+                        {{ form.company }}
+                    </div>
+                {% endif %}
+
+                <div class="row g-3 mb-3">
+                    <div class="col-md-8">
+                        <label class="form-label fw-semibold">Leave Type Name <span class="text-danger">*</span></label>
+                        {{ form.name }}
+                        {% if form.name.errors %}<div class="text-danger small">{{ form.name.errors }}</div>{% endif %}
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label fw-semibold">Code <span class="text-danger">*</span></label>
+                        {{ form.code }}
+                        {% if form.code.errors %}<div class="text-danger small">{{ form.code.errors }}</div>{% endif %}
+                    </div>
+                </div>
+
+                <div class="mb-3">
+                    <label class="form-label fw-semibold">Annual Quota (Days) <span class="text-danger">*</span></label>
+                    {{ form.annual_quota }}
+                </div>
+
+                <div class="row g-3 mb-3">
+                    <div class="col-6">
+                        <div class="form-check">
+                            {{ form.is_paid }}
+                            <label class="form-check-label fw-semibold" for="{{ form.is_paid.id_for_label }}">Paid Leave</label>
+                        </div>
+                    </div>
+                    <div class="col-6">
+                        <div class="form-check">
+                            {{ form.allow_half_day }}
+                            <label class="form-check-label fw-semibold" for="{{ form.allow_half_day.id_for_label }}">Allow Half-Day</label>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="row g-3 mb-3">
+                    <div class="col-6">
+                        <div class="form-check">
+                            {{ form.requires_attachment }}
+                            <label class="form-check-label fw-semibold" for="{{ form.requires_attachment.id_for_label }}">Requires Attachment</label>
+                        </div>
+                    </div>
+                    <div class="col-6">
+                        <div class="form-check">
+                            {{ form.is_active }}
+                            <label class="form-check-label fw-semibold" for="{{ form.is_active.id_for_label }}">Is Active</label>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="card bg-light p-3 border mb-3">
+                    <div class="form-check mb-2">
+                        {{ form.is_carry_forward }}
+                        <label class="form-check-label fw-semibold" for="{{ form.is_carry_forward.id_for_label }}">Enable Carry Forward</label>
+                    </div>
+                    <div class="mt-2">
+                        <label class="form-label small fw-semibold">Max Carry Forward Days</label>
+                        {{ form.max_carry_forward_days }}
+                    </div>
+                </div>
+
+                <div class="mb-4">
+                    <label class="form-label fw-semibold">Description / Policy Details</label>
+                    {{ form.description }}
+                </div>
+
+                <div class="d-flex justify-content-between align-items-center pt-2 border-top">
+                    <a href="{% url 'leaves:types_list' %}" class="btn btn-outline-secondary">Cancel</a>
+                    <button type="submit" class="btn btn-primary px-4">Save Leave Type</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+{% endblock %}

@@ -1,0 +1,213 @@
+{% extends 'base.html' %}
+
+{% block title %}Manual Punch Requests &mdash; Smart HRMS{% endblock %}
+{% block page_title %}Missed Punch Requests Roster{% endblock %}
+
+{% block content %}
+<div class="d-flex flex-column flex-sm-row justify-content-between align-items-start align-items-sm-center gap-3 mb-4">
+    <div>
+        <h4 class="fw-bold mb-1 text-dark">
+            <i class="bi bi-clock-history text-primary me-2"></i> Attendance Regularization Requests
+        </h4>
+        <p class="text-muted small mb-0">Review employee requests for forgotten or missed camera punches</p>
+    </div>
+    <div class="d-flex flex-wrap gap-2">
+        <a href="{% url 'attendance:list' %}" class="btn btn-outline-primary btn-sm shadow-sm">
+            <i class="bi bi-calendar-check me-1"></i> Attendance Log
+        </a>
+        <a href="{% url 'attendance:create' %}" class="btn btn-outline-secondary btn-sm shadow-sm">
+            <i class="bi bi-plus-circle me-1"></i> Direct Manual Entry
+        </a>
+    </div>
+</div>
+
+<!-- Status Tabs Bar -->
+<div class="card card-stat p-2 mb-4">
+    <div class="d-flex flex-wrap gap-2 align-items-center">
+        <a href="?status=all{% if query %}&q={{ query }}{% endif %}" class="btn btn-sm {% if status_tab == 'all' %}btn-primary{% else %}btn-light{% endif %}">
+            All Requests <span class="badge {% if status_tab == 'all' %}bg-white text-primary{% else %}bg-secondary{% endif %} ms-1">{{ counts.all }}</span>
+        </a>
+        <a href="?status=pending{% if query %}&q={{ query }}{% endif %}" class="btn btn-sm {% if status_tab == 'pending' %}btn-warning text-dark{% else %}btn-light{% endif %}">
+            Pending Review <span class="badge {% if status_tab == 'pending' %}bg-dark text-warning{% else %}bg-warning text-dark{% endif %} ms-1">{{ counts.pending }}</span>
+        </a>
+        <a href="?status=approved{% if query %}&q={{ query }}{% endif %}" class="btn btn-sm {% if status_tab == 'approved' %}btn-success{% else %}btn-light{% endif %}">
+            Approved <span class="badge {% if status_tab == 'approved' %}bg-white text-success{% else %}bg-success{% endif %} ms-1">{{ counts.approved }}</span>
+        </a>
+        <a href="?status=rejected{% if query %}&q={{ query }}{% endif %}" class="btn btn-sm {% if status_tab == 'rejected' %}btn-danger{% else %}btn-light{% endif %}">
+            Rejected <span class="badge {% if status_tab == 'rejected' %}bg-white text-danger{% else %}bg-danger{% endif %} ms-1">{{ counts.rejected }}</span>
+        </a>
+
+        <!-- Search Box -->
+        <form method="get" class="ms-sm-auto d-flex gap-2">
+            <input type="hidden" name="status" value="{{ status_tab }}">
+            <div class="input-group input-group-sm">
+                <input type="text" name="q" value="{{ query }}" class="form-control" placeholder="Search employee or reason...">
+                <button type="submit" class="btn btn-outline-secondary"><i class="bi bi-search"></i></button>
+            </div>
+            {% if query %}
+            <a href="?status={{ status_tab }}" class="btn btn-outline-secondary btn-sm" title="Clear search"><i class="bi bi-x-lg"></i></a>
+            {% endif %}
+        </form>
+    </div>
+</div>
+
+<!-- Requests Table Card -->
+<div class="card card-stat overflow-hidden">
+    <div class="table-responsive">
+        <table class="table table-hover align-middle mb-0">
+            <thead class="table-light">
+                <tr>
+                    <th scope="col" style="min-width: 170px;">Employee</th>
+                    <th scope="col">Missed Date</th>
+                    <th scope="col">Scope</th>
+                    <th scope="col">Claimed Times</th>
+                    <th scope="col" style="max-width: 250px;">Reason / Explanation</th>
+                    <th scope="col">Status</th>
+                    <th scope="col">Review Info</th>
+                    <th scope="col" class="text-end" style="min-width: 160px;">Actions</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for req in page_obj %}
+                <tr>
+                    <td>
+                        <div class="d-flex align-items-center gap-2">
+                            <span class="avatar-circle-sm bg-primary-subtle text-primary fw-bold">
+                                {{ req.employee.first_name|first }}{{ req.employee.last_name|first }}
+                            </span>
+                            <div>
+                                <a href="{% url 'employees:detail' req.employee.pk %}" class="fw-semibold text-dark text-decoration-none">
+                                    {{ req.employee.get_full_name }}
+                                </a>
+                                <div class="text-muted" style="font-size: 0.75rem;">
+                                    {{ req.employee.employee_id }} &bull; {{ req.employee.department.name|default:"General" }}
+                                </div>
+                            </div>
+                        </div>
+                    </td>
+                    <td>
+                        <span class="fw-bold text-dark">{{ req.date|date:"d M Y" }}</span>
+                        <div class="text-muted" style="font-size: 0.75rem;">{{ req.date|date:"l" }}</div>
+                    </td>
+                    <td>
+                        <span class="badge bg-light text-dark border">{{ req.get_punch_type_display }}</span>
+                    </td>
+                    <td>
+                        <div class="font-monospace small">
+                            {% if req.check_in_time %}
+                                <span class="text-success fw-semibold"><i class="bi bi-box-arrow-in-right me-1"></i>{{ req.check_in_time|time:"h:i A" }}</span>
+                            {% endif %}
+                            {% if req.check_in_time and req.check_out_time %} &rarr; {% endif %}
+                            {% if req.check_out_time %}
+                                <span class="text-primary fw-semibold"><i class="bi bi-box-arrow-right me-1"></i>{{ req.check_out_time|time:"h:i A" }}</span>
+                            {% endif %}
+                        </div>
+                    </td>
+                    <td style="max-width: 250px;">
+                        <div class="text-truncate small" title="{{ req.reason }}">{{ req.reason }}</div>
+                    </td>
+                    <td>
+                        <span class="badge {{ req.get_status_badge_class }}">
+                            {{ req.get_status_display }}
+                        </span>
+                    </td>
+                    <td>
+                        {% if req.reviewed_by %}
+                            <div class="small fw-semibold text-dark">{{ req.reviewed_by.get_display_name }}</div>
+                            <div class="text-muted" style="font-size: 0.72rem;">{{ req.reviewed_at|date:"d M, H:i" }}</div>
+                            {% if req.review_remarks %}
+                                <div class="text-muted text-truncate" style="font-size: 0.72rem; max-width: 140px;" title="{{ req.review_remarks }}">
+                                    "{{ req.review_remarks }}"
+                                </div>
+                            {% endif %}
+                        {% else %}
+                            <span class="text-muted small">&mdash;</span>
+                        {% endif %}
+                    </td>
+                    <td class="text-end">
+                        {% if req.status == 'pending' %}
+                        <div class="d-flex justify-content-end gap-1">
+                            <!-- Approve Form -->
+                            <form method="post" action="{% url 'attendance:request_approve' req.pk %}" class="d-inline">
+                                {% csrf_token %}
+                                <button type="submit" class="btn btn-success btn-sm" title="Approve Request" onclick="return confirm('Approve manual punch for {{ req.employee.get_full_name }} on {{ req.date }}? Attendance record will be updated.');">
+                                    <i class="bi bi-check-lg me-1"></i> Approve
+                                </button>
+                            </form>
+                            <!-- Reject Modal Trigger -->
+                            <button type="button" class="btn btn-outline-danger btn-sm" data-bs-toggle="modal" data-bs-target="#rejectModal{{ req.pk }}" title="Reject Request">
+                                <i class="bi bi-x-lg"></i>
+                            </button>
+                        </div>
+
+                        <!-- Reject Modal -->
+                        <div class="modal fade" id="rejectModal{{ req.pk }}" tabindex="-1" aria-hidden="true">
+                            <div class="modal-dialog modal-dialog-centered text-start">
+                                <div class="modal-content">
+                                    <form method="post" action="{% url 'attendance:request_reject' req.pk %}">
+                                        {% csrf_token %}
+                                        <div class="modal-header">
+                                            <h6 class="modal-title fw-bold">Reject Missed Punch Request</h6>
+                                            <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                                        </div>
+                                        <div class="modal-body">
+                                            <p class="small text-muted mb-3">
+                                                Are you sure you want to reject the manual punch request for <strong>{{ req.employee.get_full_name }}</strong> for <strong>{{ req.date|date:"d M Y" }}</strong>?
+                                            </p>
+                                            <div class="mb-3">
+                                                <label class="form-label small fw-semibold">Rejection Remarks / Explanation:</label>
+                                                <textarea name="review_remarks" class="form-control form-control-sm" rows="3" placeholder="Explain reason for rejection..." required></textarea>
+                                            </div>
+                                        </div>
+                                        <div class="modal-footer">
+                                            <button type="button" class="btn btn-light btn-sm" data-bs-dismiss="modal">Cancel</button>
+                                            <button type="submit" class="btn btn-danger btn-sm">Confirm Rejection</button>
+                                        </div>
+                                    </form>
+                                </div>
+                            </div>
+                        </div>
+                        {% else %}
+                            <span class="text-muted small">Reviewed</span>
+                        {% endif %}
+                    </td>
+                </tr>
+                {% empty %}
+                <tr>
+                    <td colspan="8" class="text-center py-5">
+                        <i class="bi bi-inbox fs-1 text-muted d-block mb-2"></i>
+                        <h6 class="text-dark fw-bold">No Manual Punch Requests</h6>
+                        <p class="text-muted small mb-0">No attendance regularization requests found for this status.</p>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+
+<!-- Pagination -->
+{% if page_obj.has_other_pages %}
+<div class="d-flex flex-column flex-sm-row justify-content-between align-items-center gap-2 mt-3">
+    <div class="text-muted small">
+        Showing {{ page_obj.start_index }} to {{ page_obj.end_index }} of {{ page_obj.paginator.count }} requests
+    </div>
+    <ul class="pagination pagination-sm mb-0">
+        {% if page_obj.has_previous %}
+            <li class="page-item"><a class="page-link" href="?page={{ page_obj.previous_page_number }}&status={{ status_tab }}&q={{ query }}">Previous</a></li>
+        {% endif %}
+        {% for num in page_obj.paginator.page_range %}
+            {% if page_obj.number == num %}
+                <li class="page-item active"><span class="page-link">{{ num }}</span></li>
+            {% elif num > page_obj.number|add:'-3' and num < page_obj.number|add:'3' %}
+                <li class="page-item"><a class="page-link" href="?page={{ num }}&status={{ status_tab }}&q={{ query }}">{{ num }}</a></li>
+            {% endif %}
+        {% endfor %}
+        {% if page_obj.has_next %}
+            <li class="page-item"><a class="page-link" href="?page={{ page_obj.next_page_number }}&status={{ status_tab }}&q={{ query }}">Next</a></li>
+        {% endif %}
+    </ul>
+</div>
+{% endif %}
+
+{% endblock %}

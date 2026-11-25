@@ -1,0 +1,52 @@
+{% extends 'emails/base_email.html' %}
+
+{% block email_title %}Your Verification Code &mdash; Smart HRMS{% endblock %}
+{% block preheader %}Your 6-digit verification code is {{ otp_code }}. Valid for {{ expiry_minutes }} minutes.{% endblock %}
+
+{% block header_badge %}
+<span style="background-color: rgba(99, 102, 241, 0.2); color: #818cf8; font-size: 11px; font-weight: 600; padding: 4px 10px; border-radius: 20px; letter-spacing: 0.5px; text-transform: uppercase;">
+    Security OTP
+</span>
+{% endblock %}
+
+{% block content %}
+<div style="margin-bottom: 24px;">
+    <h1 style="font-size: 22px; font-weight: 700; color: #0f172a; margin: 0 0 10px 0; letter-spacing: -0.3px;">
+        Security Verification Code
+    </h1>
+    <p style="font-size: 15px; color: #475569; margin: 0; line-height: 1.6;">
+        Hello <strong>{{ user_display_name }}</strong>,
+    </p>
+    <p style="font-size: 15px; color: #475569; margin: 8px 0 0 0; line-height: 1.6;">
+        We received a request for <strong>{{ purpose }}</strong> associated with your Smart HRMS account (<strong>{{ user.username }}</strong>). Use the one-time verification code below to proceed:
+    </p>
+</div>
+
+<!-- Big-Tech OTP Box -->
+<div style="background-color: #f1f5f9; border: 1.5px dashed #6366f1; border-radius: 10px; padding: 24px 20px; text-align: center; margin: 28px 0;">
+    <div style="font-size: 11px; font-weight: 700; color: #6366f1; letter-spacing: 1px; text-transform: uppercase; margin-bottom: 8px;">
+        One-Time Verification Code
+    </div>
+    <div style="font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; font-size: 34px; font-weight: 800; color: #1e1b4b; letter-spacing: 10px; line-height: 1.2;">
+        {{ otp_code }}
+    </div>
+    <div style="font-size: 12px; color: #64748b; margin-top: 10px;">
+        ⏱️ Code expires in <strong>{{ expiry_minutes }} minutes</strong>
+    </div>
+</div>
+
+<!-- Security Alert Notice -->
+<div style="background-color: #fef2f2; border-left: 4px solid #ef4444; border-radius: 6px; padding: 14px 16px; margin: 24px 0;">
+    <div style="font-size: 13px; font-weight: 600; color: #991b1b; margin-bottom: 4px;">
+        Important Security Notice
+    </div>
+    <div style="font-size: 12px; color: #7f1d1d; line-height: 1.5;">
+        Never share this code with anyone, including HRMS administrators. Smart HRMS staff will never ask for your verification code. If you did not make this request, someone may be trying to access your account. Please log in immediately and change your password.
+    </div>
+</div>
+
+<p style="font-size: 14px; color: #64748b; margin: 24px 0 0 0; line-height: 1.6;">
+    Stay secure,<br>
+    <strong style="color: #0f172a;">Smart HRMS Security Team</strong>
+</p>
+{% endblock %}

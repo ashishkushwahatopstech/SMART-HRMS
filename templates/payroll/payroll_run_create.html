@@ -1,0 +1,67 @@
+{% extends 'base.html' %}
+
+{% block title %}Initiate Payroll Run &mdash; Smart HRMS{% endblock %}
+{% block page_title %}Process Monthly Payroll{% endblock %}
+
+{% block content %}
+<div class="row justify-content-center">
+    <div class="col-12 col-md-8 col-lg-6">
+        <div class="card card-stat p-4">
+            <div class="d-flex align-items-center gap-2 mb-3">
+                <i class="bi bi-cash-stack text-primary fs-3"></i>
+                <h5 class="fw-bold mb-0 text-dark">Process New Payroll Run</h5>
+            </div>
+            <p class="text-muted small mb-4">
+                The payroll engine automatically evaluates corporate working days, attendance logs, overtime hours, and unpaid leave (LWP) deductions according to company policy.
+            </p>
+
+            <form method="post">
+                {% csrf_token %}
+
+                {% if form.company.is_hidden %}
+                    {{ form.company }}
+                {% else %}
+                    <div class="mb-3">
+                        <label class="form-label fw-semibold">Company <span class="text-danger">*</span></label>
+                        {{ form.company }}
+                    </div>
+                {% endif %}
+
+                <div class="row g-3 mb-3">
+                    <div class="col-md-6">
+                        <label class="form-label fw-semibold">Month <span class="text-danger">*</span></label>
+                        {{ form.month }}
+                    </div>
+                    <div class="col-md-6">
+                        <label class="form-label fw-semibold">Year <span class="text-danger">*</span></label>
+                        {{ form.year }}
+                    </div>
+                </div>
+
+                <div class="mb-4">
+                    <label class="form-label fw-semibold">Notes / Remarks</label>
+                    {{ form.notes }}
+                </div>
+
+                <div class="card bg-light p-3 border mb-4">
+                    <h6 class="fw-bold text-dark small mb-2"><i class="bi bi-info-circle text-primary me-1"></i> Policy Compliance Rules:</h6>
+                    <ul class="small text-muted mb-0 ps-3">
+                        <li><strong>Actual Working Days Policy:</strong> Daily rate is computed using actual business working days (excluding company public holidays and scheduled weekly offs).</li>
+                        <li><strong>Fixed 26 Days Policy:</strong> Daily rate is fixed at monthly gross / 26 days.</li>
+                        <li><strong>Overtime Multiplier:</strong> Calculated at 1.5x of hourly rate for verified excess attendance hours.</li>
+                    </ul>
+                </div>
+
+                <div class="d-flex justify-content-between align-items-center pt-2 border-top">
+                    <a href="{% url 'payroll:dashboard' %}" class="btn btn-outline-secondary">
+                        <i class="bi bi-arrow-left me-1"></i> Cancel
+                    </a>
+                    <button type="submit" class="btn btn-primary px-4 shadow-sm">
+                        <i class="bi bi-gear-wide-connected me-1"></i> Process Payroll
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+{% endblock %}

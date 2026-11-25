@@ -1,0 +1,73 @@
+{% extends 'base.html' %}
+
+{% block title %}My Payslips &mdash; Smart HRMS{% endblock %}
+{% block page_title %}My Salary Payslips{% endblock %}
+
+{% block content %}
+<div class="d-flex flex-column flex-sm-row justify-content-between align-items-start align-items-sm-center gap-3 mb-4">
+    <div>
+        <h4 class="fw-bold mb-1 text-dark">
+            <i class="bi bi-receipt text-primary me-2"></i> My Payslips
+        </h4>
+        <p class="text-muted small mb-0">View and download your monthly salary statements and compensation breakdown</p>
+    </div>
+</div>
+
+<div class="card card-stat">
+    <div class="table-responsive">
+        <table class="table table-hover align-middle mb-0">
+            <thead class="table-light">
+                <tr>
+                    <th>Payroll Month</th>
+                    <th>Company</th>
+                    <th>Working Days</th>
+                    <th>Days Present</th>
+                    <th>Gross Salary</th>
+                    <th>Deductions</th>
+                    <th>Net Pay</th>
+                    <th>Disbursal Status</th>
+                    <th class="text-end">Actions</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for p in payslips %}
+                <tr>
+                    <td>
+                        <span class="fw-bold text-dark fs-6">{{ p.month_name }}</span>
+                    </td>
+                    <td>
+                        <span class="badge bg-light text-dark border">{{ p.company.code }}</span>
+                    </td>
+                    <td>{{ p.working_days }} days</td>
+                    <td>
+                        <span class="fw-semibold text-success">{{ p.days_present }}</span>
+                    </td>
+                    <td class="fw-semibold text-dark">&#8377;{{ p.gross_earnings|floatformat:2 }}</td>
+                    <td class="text-danger">&#8377;{{ p.total_deductions|floatformat:2 }}</td>
+                    <td class="text-success fw-bold fs-6">&#8377;{{ p.net_pay|floatformat:2 }}</td>
+                    <td>
+                        {% if p.payment_status == 'paid' %}
+                        <span class="badge bg-success">Disbursed</span>
+                        {% else %}
+                        <span class="badge bg-warning text-dark">Pending</span>
+                        {% endif %}
+                    </td>
+                    <td class="text-end">
+                        <a href="{% url 'payroll:payslip_detail' p.id %}" class="btn btn-sm btn-outline-primary shadow-sm">
+                            <i class="bi bi-printer me-1"></i> View / Print
+                        </a>
+                    </td>
+                </tr>
+                {% empty %}
+                <tr>
+                    <td colspan="9" class="text-center py-5 text-muted">
+                        <i class="bi bi-receipt-cutoff fs-2 d-block mb-2"></i>
+                        No payslips have been generated for your account yet.
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+{% endblock %}

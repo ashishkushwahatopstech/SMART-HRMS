@@ -1,0 +1,112 @@
+{% extends 'base.html' %}
+
+{% block title %}Calendar View: {{ month_name }} {{ year }} &mdash; Smart HRMS{% endblock %}
+{% block page_title %}Monthly Calendar View{% endblock %}
+
+{% block content %}
+<div class="card card-stat p-4 mb-4">
+    <!-- Header with Month Navigation & Company Filter -->
+    <div class="d-flex flex-column flex-md-row justify-content-between align-items-center gap-3 mb-4">
+        <div class="d-flex align-items-center gap-2">
+            <a href="?year={{ prev_year }}&month={{ prev_month }}{% if company %}&company={{ company.id }}{% endif %}" class="btn btn-outline-secondary btn-sm" title="Previous Month">
+                <i class="bi bi-chevron-left"></i>
+            </a>
+            <h4 class="fw-bold text-dark mb-0 font-monospace">
+                {{ month_name }} {{ year }}
+            </h4>
+            <a href="?year={{ next_year }}&month={{ next_month }}{% if company %}&company={{ company.id }}{% endif %}" class="btn btn-outline-secondary btn-sm" title="Next Month">
+                <i class="bi bi-chevron-right"></i>
+            </a>
+            <a href="?year={% now 'Y' %}&month={% now 'm' %}{% if company %}&company={{ company.id }}{% endif %}" class="btn btn-light btn-sm border ms-2">
+                Today
+            </a>
+        </div>
+
+        <!-- Legend and Badges -->
+        <div class="d-flex flex-wrap gap-2 align-items-center">
+            <span class="badge bg-danger">Mandatory Holiday</span>
+            <span class="badge bg-info text-dark">Optional Holiday</span>
+            <span class="badge bg-light text-muted border">Weekly Off</span>
+            {% if request.user.is_superuser %}
+            <form method="get" class="d-inline-block ms-2">
+                <input type="hidden" name="year" value="{{ year }}">
+                <input type="hidden" name="month" value="{{ month }}">
+                <select name="company" class="form-select form-select-sm" onchange="this.form.submit()">
+                    {% for c in companies_list %}
+                        <option value="{{ c.id }}" {% if company.id == c.id %}selected{% endif %}>{{ c.name }} ({{ c.code }})</option>
+                    {% endfor %}
+                </select>
+            </form>
+            {% else %}
+                <span class="badge bg-primary-subtle text-primary">{{ company.name }}</span>
+            {% endif %}
+            <a href="{% url 'holidays:list' %}?year={{ year }}" class="btn btn-outline-secondary btn-sm ms-2">
+                <i class="bi bi-list-ul me-1"></i> Table View
+            </a>
+        </div>
+    </div>
+
+    <!-- Monthly Summary Bar -->
+    <div class="p-3 bg-light rounded-3 border d-flex flex-wrap justify-content-around text-center gap-2 mb-3">
+        <div>
+            <div class="text-muted small">Public Holidays</div>
+            <div class="fs-5 fw-bold text-danger">{{ month_holidays_count }}</div>
+        </div>
+        <div class="border-start"></div>
+        <div>
+            <div class="text-muted small">Standard Working Days</div>
+            <div class="fs-5 fw-bold text-success">{{ working_days_count }} Days</div>
+        </div>
+        <div class="border-start"></div>
+        <div>
+            <div class="text-muted small">Weekly Off Policy</div>
+            <div class="fs-6 fw-semibold text-dark">{{ company.get_weekly_holiday_policy_display|default:"Sunday Only" }}</div>
+        </div>
+    </div>
+
+    <!-- Calendar Table Grid -->
+    <div class="table-responsive">
+        <table class="table table-bordered mb-0 calendar-table" style="table-layout: fixed; min-width: 600px;">
+            <thead class="table-light text-center">
+                <tr>
+                    <th style="width: 14.28%;">Mon</th>
+                    <th style="width: 14.28%;">Tue</th>
+                    <th style="width: 14.28%;">Wed</th>
+                    <th style="width: 14.28%;">Thu</th>
+                    <th style="width: 14.28%;">Fri</th>
+                    <th style="width: 14.28%;" class="text-danger">Sat</th>
+                    <th style="width: 14.28%;" class="text-danger">Sun</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for week in calendar_weeks %}
+                <tr>
+                    {% for day in week %}
+                    <td class="calendar-day-cell {% if not day.is_current_month %}bg-light opacity-50{% elif day.is_today %}table-primary border-primary border-2{% elif day.holiday %}table-danger bg-opacity-10{% elif day.is_weekly_off %}table-secondary bg-opacity-25{% endif %}" style="height: 105px; vertical-align: top; padding: 6px;">
+                        <div class="d-flex justify-content-between align-items-center mb-1">
+                            <span class="fw-bold {% if day.is_today %}badge bg-primary rounded-circle{% elif day.holiday %}text-danger{% elif day.is_weekly_off %}text-muted{% else %}text-dark{% endif %}" style="font-size: 0.9rem;">
+                                {{ day.day }}
+                            </span>
+                            {% if day.is_weekly_off and not day.holiday %}
+                                <span class="badge bg-light text-muted border" style="font-size: 0.65rem;">Off</span>
+                            {% endif %}
+                        </div>
+
+                        {% if day.holiday %}
+                        <div class="p-1 rounded mb-1 text-truncate {% if day.holiday.is_optional %}bg-info text-dark{% else %}bg-danger text-white{% endif %}" style="font-size: 0.72rem; line-height: 1.2;" title="{{ day.holiday.name }}: {{ day.holiday.description }}">
+                            <i class="bi bi-star-fill me-1" style="font-size: 0.65rem;"></i>
+                            <strong>{{ day.holiday.name }}</strong>
+                        </div>
+                        <div class="text-muted" style="font-size: 0.65rem;">
+                            {{ day.holiday.get_holiday_type_display }}
+                        </div>
+                        {% endif %}
+                    </td>
+                    {% endfor %}
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+{% endblock %}

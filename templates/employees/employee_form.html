@@ -1,0 +1,449 @@
+{% extends 'base.html' %}
+
+{% block title %}{{ title }} &mdash; Smart HRMS{% endblock %}
+{% block page_title %}{{ title }}{% endblock %}
+
+{% block content %}
+<div class="row justify-content-center">
+    <div class="col-lg-10">
+        <div class="card card-stat p-4">
+            <div class="d-flex align-items-center gap-3 mb-4 border-bottom pb-3">
+                <div class="stat-icon primary">
+                    <i class="bi bi-person-plus-fill"></i>
+                </div>
+                <div>
+                    <h5 class="fw-bold mb-0 text-dark">{{ title }}</h5>
+                    <p class="text-muted small mb-0">Provide complete employee profile, corporate assignments, and compensation details</p>
+                </div>
+            </div>
+
+            <form method="post" enctype="multipart/form-data">
+                {% csrf_token %}
+
+                <!-- Section 1: Corporate Affiliation & Identifiers -->
+                <div class="mb-4">
+                    <h6 class="fw-bold text-primary mb-3">
+                        <i class="bi bi-buildings me-1"></i> 1. Corporate Affiliation & Identifiers
+                    </h6>
+                    <div class="row g-3">
+                        <div class="col-md-6">
+                            <label for="{{ form.company.id_for_label }}" class="form-label fw-semibold small">Company <span class="text-danger">*</span></label>
+                            {{ form.company }}
+                            {% if form.company.errors %}<div class="text-danger small mt-1">{{ form.company.errors.0 }}</div>{% endif %}
+                        </div>
+                        <div class="col-md-6">
+                            <div class="d-flex justify-content-between align-items-center mb-1">
+                                <label for="{{ form.employee_id.id_for_label }}" class="form-label fw-semibold small mb-0">
+                                    <i class="bi bi-badge-ad me-1 text-primary"></i> Employee ID
+                                </label>
+                                <span class="badge bg-success-subtle text-success border border-success-subtle" style="font-size: 0.68rem;">
+                                    <i class="bi bi-magic me-1"></i>Auto-Incremented
+                                </span>
+                            </div>
+                            <div class="input-group">
+                                {{ form.employee_id }}
+                                <button type="button" class="btn btn-outline-secondary btn-sm" id="btnRefreshEmpId" title="Refresh next incremented Employee ID">
+                                    <i class="bi bi-arrow-clockwise"></i>
+                                </button>
+                            </div>
+                            <div class="form-text small text-muted">Automatically assigned in sequential increment order per company</div>
+                            {% if form.employee_id.errors %}<div class="text-danger small mt-1">{{ form.employee_id.errors.0 }}</div>{% endif %}
+                        </div>
+                        <div class="col-md-4">
+                            <label for="{{ form.department.id_for_label }}" class="form-label fw-semibold small">Department</label>
+                            {{ form.department }}
+                            {% if form.department.errors %}<div class="text-danger small mt-1">{{ form.department.errors.0 }}</div>{% endif %}
+                        </div>
+                        <div class="col-md-4">
+                            <label for="{{ form.designation.id_for_label }}" class="form-label fw-semibold small">Designation</label>
+                            {{ form.designation }}
+                            {% if form.designation.errors %}<div class="text-danger small mt-1">{{ form.designation.errors.0 }}</div>{% endif %}
+                        </div>
+                        <div class="col-md-4">
+                            <label for="{{ form.manager.id_for_label }}" class="form-label fw-semibold small">Reporting Manager</label>
+                            {{ form.manager }}
+                            <div class="form-text small" style="font-size: 0.72rem;">
+                                <i class="bi bi-shield-check me-1 text-primary"></i>Only designated Managers are eligible
+                            </div>
+                            {% if form.manager.errors %}<div class="text-danger small mt-1">{{ form.manager.errors.0 }}</div>{% endif %}
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Section 2: Personal Details -->
+                <div class="mb-4 border-top pt-4">
+                    <h6 class="fw-bold text-primary mb-3">
+                        <i class="bi bi-person me-1"></i> 2. Personal Information & Identity
+                    </h6>
+                    <div class="row g-3">
+                        <div class="col-md-6">
+                            <label for="{{ form.first_name.id_for_label }}" class="form-label fw-semibold small">First Name <span class="text-danger">*</span></label>
+                            {{ form.first_name }}
+                            {% if form.first_name.errors %}<div class="text-danger small mt-1">{{ form.first_name.errors.0 }}</div>{% endif %}
+                        </div>
+                        <div class="col-md-6">
+                            <label for="{{ form.last_name.id_for_label }}" class="form-label fw-semibold small">Last Name <span class="text-danger">*</span></label>
+                            {{ form.last_name }}
+                            {% if form.last_name.errors %}<div class="text-danger small mt-1">{{ form.last_name.errors.0 }}</div>{% endif %}
+                        </div>
+                        <div class="col-md-6">
+                            <label for="{{ form.email.id_for_label }}" class="form-label fw-semibold small">Official Email <span class="text-danger">*</span></label>
+                            {{ form.email }}
+                            {% if form.email.errors %}<div class="text-danger small mt-1">{{ form.email.errors.0 }}</div>{% endif %}
+                        </div>
+                        <div class="col-md-6">
+                            <label for="{{ form.phone.id_for_label }}" class="form-label fw-semibold small">Contact Phone <span class="text-danger">*</span></label>
+                            {{ form.phone }}
+                            {% if form.phone.errors %}<div class="text-danger small mt-1">{{ form.phone.errors.0 }}</div>{% endif %}
+                        </div>
+                        <div class="col-md-6">
+                            <label for="{{ form.profile_picture.id_for_label }}" class="form-label fw-semibold small">Identity Photo</label>
+                            {{ form.profile_picture }}
+                        </div>
+                        <div class="col-md-6">
+                            <label for="{{ form.address.id_for_label }}" class="form-label fw-semibold small">Residential Address</label>
+                            {{ form.address }}
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Section 3: Employment Terms & Status -->
+                <div class="mb-4 border-top pt-4">
+                    <h6 class="fw-bold text-primary mb-3">
+                        <i class="bi bi-file-earmark-text me-1"></i> 3. Employment Terms & Shift
+                    </h6>
+                    <div class="row g-3">
+                        <div class="col-md-4">
+                            <label for="{{ form.joining_date.id_for_label }}" class="form-label fw-semibold small">Joining Date <span class="text-danger">*</span></label>
+                            {{ form.joining_date }}
+                        </div>
+                        <div class="col-md-4">
+                            <label for="{{ form.exit_date.id_for_label }}" class="form-label fw-semibold small">Exit Date (if applicable)</label>
+                            {{ form.exit_date }}
+                        </div>
+                        <div class="col-md-4">
+                            <label for="{{ form.employment_status.id_for_label }}" class="form-label fw-semibold small">Employment Status</label>
+                            {{ form.employment_status }}
+                        </div>
+                        <div class="col-md-6">
+                            <label for="{{ form.assigned_shift.id_for_label }}" class="form-label fw-semibold small">
+                                <i class="bi bi-clock-history me-1 text-primary"></i> Assigned Shift Schedule
+                            </label>
+                            {{ form.assigned_shift }}
+                            <div class="form-text small mt-1" id="shiftTimingInfo">Select a shift schedule to auto-calculate expected hours</div>
+                            {% if form.assigned_shift.errors %}<div class="text-danger small mt-1">{{ form.assigned_shift.errors.0 }}</div>{% endif %}
+                            {{ form.assigned_shift_name }}
+                        </div>
+                        <div class="col-md-6">
+                            <label for="{{ form.working_hours_per_day.id_for_label }}" class="form-label fw-semibold small">
+                                <i class="bi bi-hourglass-split me-1 text-primary"></i> Expected Hours / Day <span class="text-danger">*</span>
+                            </label>
+                            <div class="input-group">
+                                {{ form.working_hours_per_day }}
+                                <span class="input-group-text small bg-light">hrs / day</span>
+                            </div>
+                            <div class="form-text small d-flex justify-content-between align-items-center mt-1">
+                                <span id="hoursCalcStatus" class="text-success fw-semibold"><i class="bi bi-magic me-1"></i>Auto-calculated from shift</span>
+                                <span class="text-muted"><i class="bi bi-pencil-square me-1"></i>Modify on the spot</span>
+                            </div>
+                            {% if form.working_hours_per_day.errors %}<div class="text-danger small mt-1">{{ form.working_hours_per_day.errors.0 }}</div>{% endif %}
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Section 4: Compensation & Salary -->
+                <div class="mb-4 border-top pt-4">
+                    <h6 class="fw-bold text-primary mb-3">
+                        <i class="bi bi-currency-rupee me-1"></i> 4. Compensation & Wages
+                    </h6>
+                    <div class="row g-3">
+                        <div class="col-md-3">
+                            <label for="{{ form.salary_type.id_for_label }}" class="form-label fw-semibold small">Salary Type</label>
+                            {{ form.salary_type }}
+                        </div>
+                        <div class="col-md-3">
+                            <label for="{{ form.monthly_salary.id_for_label }}" class="form-label fw-semibold small">Monthly Salary (₹)</label>
+                            {{ form.monthly_salary }}
+                        </div>
+                        <div class="col-md-3">
+                            <label for="{{ form.daily_salary.id_for_label }}" class="form-label fw-semibold small">Daily Wage (₹)</label>
+                            {{ form.daily_salary }}
+                            <div class="form-text small">Auto-calculated if 0</div>
+                        </div>
+                        <div class="col-md-3">
+                            <label for="{{ form.hourly_salary.id_for_label }}" class="form-label fw-semibold small">Hourly Rate (₹)</label>
+                            {{ form.hourly_salary }}
+                            <div class="form-text small">Auto-calculated if 0</div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Section 5: Emergency Contact -->
+                <div class="mb-4 border-top pt-4">
+                    <h6 class="fw-bold text-primary mb-3">
+                        <i class="bi bi-shield-check me-1"></i> 5. Emergency Contact
+                    </h6>
+                    <div class="row g-3">
+                        <div class="col-md-6">
+                            <label for="{{ form.emergency_contact_name.id_for_label }}" class="form-label fw-semibold small">Contact Person Name</label>
+                            {{ form.emergency_contact_name }}
+                        </div>
+                        <div class="col-md-6">
+                            <label for="{{ form.emergency_contact_phone.id_for_label }}" class="form-label fw-semibold small">Emergency Contact Phone</label>
+                            {{ form.emergency_contact_phone }}
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Section 6: Web Login Account & System Access Role -->
+                <div class="mb-4 border-top pt-4">
+                    <h6 class="fw-bold text-primary mb-3">
+                        <i class="bi bi-shield-lock me-1"></i> 6. Web Login & System Access Role
+                    </h6>
+                    <div class="p-3 bg-light rounded-3 border">
+                        {% if is_edit and employee.user %}
+                        <div class="d-flex align-items-center justify-content-between mb-3 p-2 bg-white rounded border">
+                            <div class="d-flex align-items-center gap-2">
+                                <i class="bi bi-person-check-fill text-success fs-4"></i>
+                                <div>
+                                    <div class="fw-bold small text-dark">Active Web Login Account: <code>@{{ employee.user.username }}</code></div>
+                                    <div class="text-muted small">Current access level: <strong>{{ employee.user.get_role_display }}</strong></div>
+                                </div>
+                            </div>
+                            <span class="badge {% if employee.user.is_hr_admin %}bg-danger{% elif employee.user.is_manager %}bg-warning text-dark{% else %}bg-primary{% endif %}">
+                                {{ employee.user.get_role_display }}
+                            </span>
+                        </div>
+                        <div class="row g-3">
+                            <div class="col-md-12">
+                                <label for="{{ form.user_role.id_for_label }}" class="form-label fw-semibold small">
+                                    <i class="bi bi-arrow-repeat me-1 text-primary"></i> Change System Role & Access Level
+                                </label>
+                                {{ form.user_role }}
+                                <div class="form-text small">
+                                    Switching between <strong>HR Administrator</strong>, <strong>Manager</strong>, or <strong>Employee</strong> immediately updates portal navigation and permissions.
+                                </div>
+                            </div>
+                        </div>
+                        {% else %}
+                        <div class="form-check mb-3">
+                            {{ form.create_user_account }}
+                            <label class="form-check-label fw-bold small" for="{{ form.create_user_account.id_for_label }}">
+                                Automatically create web login account for self-service portal
+                            </label>
+                        </div>
+                        <div class="row g-3">
+                            <div class="col-md-6">
+                                <label for="{{ form.user_role.id_for_label }}" class="form-label fw-semibold small">System Role</label>
+                                {{ form.user_role }}
+                            </div>
+                            <div class="col-md-6">
+                                <label for="{{ form.initial_password.id_for_label }}" class="form-label fw-semibold small">Initial Password</label>
+                                {{ form.initial_password }}
+                            </div>
+                        </div>
+                        {% endif %}
+                    </div>
+                </div>
+
+                <!-- Submit / Actions -->
+                <div class="pt-3 border-top d-flex gap-2">
+                    <button type="submit" class="btn btn-primary px-4">
+                        <i class="bi bi-check2-circle me-1"></i> Save Employee Profile
+                    </button>
+                    <a href="{% if is_edit %}{% url 'employees:detail' employee.pk %}{% else %}{% url 'employees:list' %}{% endif %}" class="btn btn-light px-4">
+                        Cancel
+                    </a>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function () {
+    const companySelect = document.getElementById('id_company');
+    const deptSelect = document.getElementById('id_department');
+    const desigSelect = document.getElementById('id_designation');
+    const managerSelect = document.getElementById('id_manager');
+    const empIdInput = document.getElementById('id_employee_id');
+    const shiftSelect = document.getElementById('id_assigned_shift');
+    const shiftNameInput = document.getElementById('id_assigned_shift_name');
+    const hoursInput = document.getElementById('id_working_hours_per_day');
+    const shiftTimingInfo = document.getElementById('shiftTimingInfo');
+    const hoursCalcStatus = document.getElementById('hoursCalcStatus');
+
+    // Store shift details (hours & timings)
+    const shiftHoursMap = {};
+
+    function parseShiftOption(text) {
+        // e.g. "General Shift (09:00 AM - 06:00 PM • 8.0 hrs)"
+        const hoursMatch = text.match(/•\s*([0-9.]+)\s*hrs/i);
+        const timingMatch = text.match(/\((.*?)\s*•/);
+        return {
+            hours: hoursMatch ? parseFloat(hoursMatch[1]) : 8.0,
+            timing: timingMatch ? timingMatch[1] : '',
+            label: text
+        };
+    }
+
+    if (shiftSelect) {
+        Array.from(shiftSelect.options).forEach(opt => {
+            if (!opt.value) return;
+            shiftHoursMap[opt.value] = parseShiftOption(opt.textContent);
+        });
+
+        function applyShiftSelection(isUserAction = false) {
+            const shiftId = shiftSelect.value;
+            if (shiftId && shiftHoursMap[shiftId]) {
+                const s = shiftHoursMap[shiftId];
+                if (isUserAction || !hoursInput.value || hoursInput.value === '0.00' || hoursInput.value === '0') {
+                    hoursInput.value = s.hours.toFixed(2);
+                }
+                if (shiftNameInput) {
+                    shiftNameInput.value = s.label.replace(/\s*•.*/, ')').trim();
+                }
+                if (shiftTimingInfo) {
+                    shiftTimingInfo.innerHTML = `<span class="badge bg-primary-subtle text-primary border border-primary-subtle"><i class="bi bi-clock me-1"></i>${s.timing || 'Shift Schedule'}</span> <span class="badge bg-success-subtle text-success border border-success-subtle ms-1"><i class="bi bi-check2-circle me-1"></i>${s.hours} hrs/day</span>`;
+                }
+                if (hoursCalcStatus && isUserAction) {
+                    hoursCalcStatus.innerHTML = `<i class="bi bi-magic me-1"></i>Auto-calculated: <strong>${s.hours} hrs</strong>`;
+                }
+            } else if (shiftTimingInfo) {
+                shiftTimingInfo.innerHTML = 'Select a shift schedule to auto-calculate expected hours';
+            }
+        }
+
+        shiftSelect.addEventListener('change', function () {
+            applyShiftSelection(true);
+        });
+
+        if (shiftSelect.value) {
+            applyShiftSelection(false);
+        }
+    }
+
+    if (hoursInput) {
+        hoursInput.addEventListener('input', function () {
+            if (hoursCalcStatus) {
+                hoursCalcStatus.innerHTML = `<span class="text-primary fw-semibold"><i class="bi bi-pencil-fill me-1"></i>Modified on the spot: <strong>${this.value} hrs</strong></span>`;
+            }
+        });
+    }
+
+    if (companySelect && companySelect.tagName === 'SELECT') {
+        companySelect.addEventListener('change', async function () {
+            const companyId = this.value;
+            if (!companyId) return;
+
+            try {
+                const response = await fetch(`/employees/api/company-options/${companyId}/`);
+                if (!response.ok) return;
+                const data = await response.json();
+
+                // 1. Update Departments
+                if (deptSelect) {
+                    const currentDept = deptSelect.value;
+                    deptSelect.innerHTML = '<option value="">---------</option>';
+                    data.departments.forEach(d => {
+                        const opt = document.createElement('option');
+                        opt.value = d.id;
+                        opt.textContent = d.name;
+                        if (d.id == currentDept) opt.selected = true;
+                        deptSelect.appendChild(opt);
+                    });
+                }
+
+                // 2. Update Designations
+                if (desigSelect) {
+                    const currentDesig = desigSelect.value;
+                    desigSelect.innerHTML = '<option value="">---------</option>';
+                    data.designations.forEach(dg => {
+                        const opt = document.createElement('option');
+                        opt.value = dg.id;
+                        opt.textContent = dg.title;
+                        if (dg.id == currentDesig) opt.selected = true;
+                        desigSelect.appendChild(opt);
+                    });
+                }
+
+                // 3. Update Managers (Strictly managers only)
+                if (managerSelect) {
+                    const currentMgr = managerSelect.value;
+                    managerSelect.innerHTML = '<option value="">-- Select Reporting Manager (Optional) --</option>';
+                    data.managers.forEach(m => {
+                        const opt = document.createElement('option');
+                        opt.value = m.id;
+                        opt.textContent = m.name;
+                        if (m.id == currentMgr) opt.selected = true;
+                        managerSelect.appendChild(opt);
+                    });
+                }
+
+                // 4. Update Shifts dynamically with Clock Timings & Hours
+                if (shiftSelect && data.shifts) {
+                    const currentShift = shiftSelect.value;
+                    shiftSelect.innerHTML = '<option value="">-- Select Shift Schedule (Clock) --</option>';
+                    data.shifts.forEach(s => {
+                        shiftHoursMap[s.id] = {
+                            hours: s.hours,
+                            timing: s.display_time,
+                            label: `${s.name} (${s.display_time} • ${s.hours} hrs)`
+                        };
+                        const opt = document.createElement('option');
+                        opt.value = s.id;
+                        opt.textContent = `${s.name} (${s.display_time} • ${s.hours} hrs)`;
+                        if (s.id == currentShift) opt.selected = true;
+                        shiftSelect.appendChild(opt);
+                    });
+                    if (!shiftSelect.value && data.shifts.length > 0) {
+                        shiftSelect.value = data.shifts[0].id;
+                        applyShiftSelection(true);
+                    }
+                }
+
+                // 5. Update next Employee ID when switching companies
+                {% if not is_edit %}
+                if (empIdInput && data.next_employee_id) {
+                    empIdInput.value = data.next_employee_id;
+                }
+                {% endif %}
+
+            } catch (err) {
+                // Silently fallback to server rendered options
+            }
+        });
+    }
+
+    // Refresh Next Employee ID Button
+    const btnRefreshEmpId = document.getElementById('btnRefreshEmpId');
+    if (btnRefreshEmpId && empIdInput) {
+        btnRefreshEmpId.addEventListener('click', async function () {
+            const companyId = companySelect ? companySelect.value : '';
+            if (!companyId) return;
+            try {
+                const res = await fetch(`/employees/api/company-options/${companyId}/`);
+                if (res.ok) {
+                    const data = await res.json();
+                    if (data.next_employee_id) {
+                        empIdInput.value = data.next_employee_id;
+                    }
+                }
+            } catch (e) {}
+        });
+    }
+
+    // Auto-populate on page load if field is blank
+    {% if not is_edit %}
+    if (empIdInput && !empIdInput.value && companySelect && companySelect.value) {
+        fetch(`/employees/api/company-options/${companySelect.value}/`)
+            .then(res => res.json())
+            .then(data => {
+                if (data.next_employee_id) empIdInput.value = data.next_employee_id;
+            })
+            .catch(() => {});
+    }
+    {% endif %}
+});
+</script>
+{% endblock %}

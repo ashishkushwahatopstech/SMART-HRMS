@@ -1,0 +1,389 @@
+{% extends 'base.html' %}
+
+{% block title %}Biometric Face Enrollment: {{ employee.get_full_name }} &mdash; Smart HRMS{% endblock %}
+{% block page_title %}Face Biometric Enrollment{% endblock %}
+
+{% block content %}
+<div class="row g-3 g-lg-4">
+    <!-- Camera Viewport & Controls -->
+    <div class="col-lg-7">
+        <div class="card card-stat p-3 p-sm-4">
+            <div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
+                <div>
+                    <h5 class="fw-bold mb-1 text-dark">
+                        <i class="bi bi-person-bounding-box text-primary me-2"></i> Facial Capture Session
+                    </h5>
+                    <p class="text-muted small mb-0">Biometric enrollment for <strong>{{ employee.get_full_name }}</strong> ({{ employee.employee_id }})</p>
+                </div>
+                <div>
+                    {% if employee.face_registration_status %}
+                        <span class="badge bg-success fs-6"><i class="bi bi-shield-check me-1"></i> Active Biometrics</span>
+                    {% else %}
+                        <span class="badge bg-warning text-dark fs-6"><i class="bi bi-hourglass-split me-1"></i> Pending Enrollment</span>
+                    {% endif %}
+                </div>
+            </div>
+
+            <!-- Video Viewport Container -->
+            <div class="kiosk-viewport-container mb-3" id="enrollContainer">
+                <video id="enrollVideo" class="kiosk-video" autoplay playsinline muted></video>
+                <canvas id="enrollCanvas" style="display: none;"></canvas>
+                <canvas id="enrollOverlay" class="position-absolute top-0 start-0 w-100 h-100" style="pointer-events: none; z-index: 8;"></canvas>
+
+                <!-- High-Tech Cyber Brackets & Alignment Oval -->
+                <div class="hud-viewfinder" id="enrollBrackets" style="display: none;">
+                    <div class="hud-bracket tl"></div>
+                    <div class="hud-bracket tr"></div>
+                    <div class="hud-bracket bl"></div>
+                    <div class="hud-bracket br"></div>
+                    <div class="face-target-oval"></div>
+                </div>
+
+                <!-- Flip Camera Button (Top Right) -->
+                <div class="position-absolute top-0 end-0 p-3" style="z-index: 15;">
+                    <button type="button" class="kiosk-toolbar-btn" id="btnFlipEnrollCam" title="Switch Front/Rear Camera">
+                        <i class="bi bi-arrow-repeat"></i> <span class="d-none d-sm-inline">Flip Cam</span>
+                    </button>
+                </div>
+
+                <!-- Initial Start Camera Overlay -->
+                <div id="startOverlay" class="position-absolute top-0 start-0 w-100 h-100 d-flex flex-column justify-content-center align-items-center bg-dark bg-opacity-75 text-white p-3 p-sm-4" style="z-index: 12;">
+                    <div class="p-3 bg-white bg-opacity-10 rounded-circle mb-3 shadow">
+                        <i class="bi bi-camera-video fs-1 text-primary"></i>
+                    </div>
+                    <h6 class="fw-bold mb-1 text-center">Camera Initialization Required</h6>
+                    <p class="small text-white-50 text-center mb-3" style="max-width: 380px;">
+                        Position your face inside the target oval under balanced lighting. Works on mobile phones and desktop cameras.
+                    </p>
+                    <button type="button" class="btn btn-primary px-4 shadow-lg" id="btnStartCamera">
+                        <i class="bi bi-play-circle me-1"></i> Start Camera Stream
+                    </button>
+                </div>
+
+                <!-- Guidance HUD text -->
+                <div id="hudGuidance" class="position-absolute bottom-0 start-50 translate-middle-x mb-3 badge bg-dark bg-opacity-80 text-white px-3 py-2 small shadow text-truncate" style="display: none; max-width: 90%; z-index: 10;">
+                    <i class="bi bi-info-circle text-info me-1"></i> <span id="guidanceText">Center your face in the oval guide</span>
+                </div>
+            </div>
+
+            <!-- Capture Progress Bar -->
+            <div class="mb-3">
+                <div class="d-flex justify-content-between small text-muted mb-1">
+                    <span>Enrollment Completion</span>
+                    <span class="fw-bold text-dark" id="progressLabel">{{ samples_count }} / 5 Samples</span>
+                </div>
+                <div class="progress" style="height: 10px; border-radius: 6px;">
+                    <div class="progress-bar progress-bar-striped progress-bar-animated bg-success" id="progressBar" role="progressbar" style="width: {% widthratio samples_count 5 100 %}%;"></div>
+                </div>
+            </div>
+
+            <!-- Action Controls -->
+            <div class="d-flex flex-wrap gap-2 justify-content-between align-items-center">
+                <div class="d-flex flex-wrap gap-2">
+                    <button type="button" class="btn btn-primary shadow-sm" id="btnCaptureManual" disabled>
+                        <i class="bi bi-camera me-1"></i> Capture Single
+                    </button>
+                    <button type="button" class="btn btn-success shadow-sm" id="btnCaptureAuto" disabled>
+                        <i class="bi bi-magic me-1"></i> Auto-Capture (5 Angles)
+                    </button>
+                </div>
+                <div>
+                    <a href="{% url 'employees:detail' employee.pk %}" class="btn btn-outline-secondary">
+                        <i class="bi bi-check2 me-1"></i> Done & Return
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Enrolled Samples Gallery & Guidelines -->
+    <div class="col-lg-5">
+        <div class="card card-stat p-3 p-sm-4 mb-3 mb-lg-4">
+            <div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
+                <h6 class="fw-bold text-dark mb-0">
+                    <i class="bi bi-images text-primary me-2"></i> Captured Training Samples
+                </h6>
+                {% if samples_count > 0 %}
+                <a href="{% url 'attendance:api_reset_face_data' employee.pk %}" class="btn btn-outline-danger btn-sm" onclick="return confirm('Reset all captured facial samples for this employee?');">
+                    <i class="bi bi-trash"></i> Reset
+                </a>
+                {% endif %}
+            </div>
+
+            <div class="row g-2 mb-3" id="sampleGallery">
+                {% for sample in sample_files %}
+                <div class="col-4 text-center">
+                    <div class="border rounded-2 p-1 bg-light position-relative">
+                        <img src="/media/faces/{{ employee.company.code }}/{{ employee.employee_id }}/{{ sample }}" class="img-fluid rounded" alt="Sample">
+                        <span class="badge bg-dark bg-opacity-75 position-absolute bottom-0 start-50 translate-middle-x mb-1" style="font-size: 0.65rem;">
+                            {{ sample }}
+                        </span>
+                    </div>
+                </div>
+                {% empty %}
+                <div class="col-12 text-center py-4 text-muted small" id="noSamplesMsg">
+                    <i class="bi bi-camera-fill fs-3 text-muted d-block mb-2"></i>
+                    No facial samples enrolled yet.<br>Click "Auto-Capture" once camera starts.
+                </div>
+                {% endfor %}
+            </div>
+
+            <!-- Best Practice Guidelines -->
+            <div class="p-3 bg-light rounded-3 border small text-muted">
+                <h6 class="fw-bold text-dark small mb-2"><i class="bi bi-lightbulb-fill text-warning me-1"></i> Guidelines for High Accuracy</h6>
+                <ul class="ps-3 mb-0">
+                    <li>Maintain balanced room lighting; avoid strong backlight.</li>
+                    <li>Look straight into the lens, followed by slight 5&deg; head turns.</li>
+                    <li>Remove dark sunglasses; clear prescription glasses are fine.</li>
+                    <li>Minimum 5 samples required to activate live face recognition.</li>
+                </ul>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function () {
+    const video = document.getElementById('enrollVideo');
+    const canvas = document.getElementById('enrollCanvas');
+    const overlay = document.getElementById('enrollOverlay');
+    const enrollBrackets = document.getElementById('enrollBrackets');
+    const startOverlay = document.getElementById('startOverlay');
+    const btnStart = document.getElementById('btnStartCamera');
+    const btnFlip = document.getElementById('btnFlipEnrollCam');
+    const btnManual = document.getElementById('btnCaptureManual');
+    const btnAuto = document.getElementById('btnCaptureAuto');
+    const progressBar = document.getElementById('progressBar');
+    const progressLabel = document.getElementById('progressLabel');
+    const hud = document.getElementById('hudGuidance');
+    const guidanceText = document.getElementById('guidanceText');
+    const gallery = document.getElementById('sampleGallery');
+    const noSamplesMsg = document.getElementById('noSamplesMsg');
+
+    let currentSampleIndex = {{ samples_count }} + 1;
+    let streamActive = false;
+    let currentFacingMode = 'user';
+    let currentStream = null;
+
+    // Start / Restart Camera
+    async function startCamera(facingMode) {
+        if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+            alert('Camera Access Notice:\n\nModern mobile browsers require HTTPS when accessing via network IP.\n\nOption 1: Open https://' + window.location.host + window.location.pathname);
+            return;
+        }
+
+        if (currentStream) {
+            currentStream.getTracks().forEach(track => track.stop());
+        }
+
+        try {
+            const constraints = {
+                video: {
+                    width: { ideal: 640 },
+                    height: { ideal: 480 },
+                    facingMode: facingMode
+                }
+            };
+            const stream = await navigator.mediaDevices.getUserMedia(constraints);
+            currentStream = stream;
+            video.srcObject = stream;
+
+            video.style.transform = (facingMode === 'user') ? 'scaleX(-1)' : 'scaleX(1)';
+
+            streamActive = true;
+            startOverlay.style.display = 'none';
+            enrollBrackets.style.display = 'block';
+            btnManual.disabled = false;
+            btnAuto.disabled = false;
+            hud.style.display = 'block';
+        } catch (err) {
+            alert('Unable to access camera: ' + err.message + '\nPlease check browser permissions.');
+        }
+    }
+
+    btnStart.addEventListener('click', function () {
+        startCamera(currentFacingMode);
+    });
+
+    btnFlip.addEventListener('click', function () {
+        currentFacingMode = (currentFacingMode === 'user') ? 'environment' : 'user';
+        startCamera(currentFacingMode);
+    });
+
+    // Capture Frame to Base64 (High-Speed Downscaled Payload)
+    function captureFrameBase64() {
+        const origW = video.videoWidth || 640;
+        const origH = video.videoHeight || 480;
+        const targetW = Math.min(480, origW);
+        const targetH = Math.round((targetW / origW) * origH);
+        canvas.width = targetW;
+        canvas.height = targetH;
+        const ctx = canvas.getContext('2d');
+        if (currentFacingMode === 'user') {
+            ctx.translate(canvas.width, 0);
+            ctx.scale(-1, 1);
+        }
+        ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+        return canvas.toDataURL('image/jpeg', 0.85);
+    }
+
+    // Draw detected face red recognition target box
+    function drawDetectionBox(box) {
+        overlay.width = video.clientWidth;
+        overlay.height = video.clientHeight;
+        const ctx = overlay.getContext('2d');
+        ctx.clearRect(0, 0, overlay.width, overlay.height);
+
+        if (!box) return;
+
+        const scaleX = overlay.width / (video.videoWidth || 640);
+        const scaleY = overlay.height / (video.videoHeight || 480);
+
+        let x;
+        if (currentFacingMode === 'user') {
+            const origX = box[0];
+            const origW = box[2];
+            const mirroredX = (video.videoWidth || 640) - (origX + origW);
+            x = mirroredX * scaleX;
+        } else {
+            x = box[0] * scaleX;
+        }
+
+        const y = box[1] * scaleY;
+        const w = box[2] * scaleX;
+        const h = box[3] * scaleY;
+
+        ctx.save();
+        // 1. Vibrant Red Square
+        ctx.shadowColor = '#ef4444';
+        ctx.shadowBlur = 10;
+        ctx.strokeStyle = '#ef4444';
+        ctx.lineWidth = 3.5;
+        ctx.strokeRect(x, y, w, h);
+
+        // 2. High-Tech Cyber Corner Brackets (Red)
+        ctx.shadowBlur = 0;
+        ctx.strokeStyle = '#dc2626';
+        ctx.lineWidth = 5;
+        ctx.lineCap = 'round';
+        const cl = Math.max(14, Math.min(26, w * 0.22));
+
+        // TL, TR, BL, BR
+        ctx.beginPath(); ctx.moveTo(x, y + cl); ctx.lineTo(x, y); ctx.lineTo(x + cl, y); ctx.stroke();
+        ctx.beginPath(); ctx.moveTo(x + w - cl, y); ctx.lineTo(x + w, y); ctx.lineTo(x + w, y + cl); ctx.stroke();
+        ctx.beginPath(); ctx.moveTo(x, y + h - cl); ctx.lineTo(x, y + h); ctx.lineTo(x + cl, y + h); ctx.stroke();
+        ctx.beginPath(); ctx.moveTo(x + w - cl, y + h); ctx.lineTo(x + w, y + h); ctx.lineTo(x + w, y + h - cl); ctx.stroke();
+
+        // 3. Subtle translucent red fill
+        ctx.fillStyle = 'rgba(239, 68, 68, 0.12)';
+        ctx.fillRect(x, y, w, h);
+
+        // 4. Red Banner Label Tag
+        ctx.font = 'bold 12px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, monospace';
+        const label = '● FACE CAPTURE TARGET';
+        const textMetrics = ctx.measureText(label);
+        const tagW = Math.max(w, textMetrics.width + 20);
+        const tagH = 24;
+        const tagY = Math.max(4, y - tagH - 4);
+
+        ctx.fillStyle = '#dc2626';
+        ctx.fillRect(x, tagY, tagW, tagH);
+        ctx.fillStyle = '#ffffff';
+        ctx.fillText(label, x + 8, tagY + 16);
+
+        ctx.restore();
+    }
+
+    // Submit face sample via AJAX
+    async function submitSample(sampleIndex) {
+        const b64 = captureFrameBase64();
+        try {
+            const resp = await fetch("{% url 'attendance:api_save_face_sample' employee.pk %}", {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    image: b64,
+                    sample_index: sampleIndex
+                })
+            });
+            const data = await resp.json();
+
+            if (data.status === 'success') {
+                drawDetectionBox(data.box);
+                guidanceText.innerText = `Sample ${data.sample_index} captured successfully!`;
+
+                const pct = Math.min(100, Math.round((data.total_samples / 5) * 100));
+                progressBar.style.width = pct + '%';
+                progressLabel.innerText = `${data.total_samples} / 5 Samples`;
+
+                if (noSamplesMsg) noSamplesMsg.style.display = 'none';
+
+                const newCard = document.createElement('div');
+                newCard.className = 'col-4 text-center';
+                const filename = `sample_${String(data.sample_index).padStart(2, '0')}.jpg`;
+                newCard.innerHTML = `
+                    <div class="border rounded-2 p-1 bg-light position-relative">
+                        <img src="/media/faces/{{ employee.company.code }}/{{ employee.employee_id }}/${filename}?t=${Date.now()}" class="img-fluid rounded" alt="Sample">
+                        <span class="badge bg-dark bg-opacity-75 position-absolute bottom-0 start-50 translate-middle-x mb-1" style="font-size: 0.65rem;">
+                            ${filename}
+                        </span>
+                    </div>
+                `;
+                gallery.appendChild(newCard);
+
+                currentSampleIndex++;
+                return true;
+            } else {
+                guidanceText.innerText = data.message || 'Face not detected clearly. Try again.';
+                return false;
+            }
+        } catch (e) {
+            guidanceText.innerText = 'Upload failed. Check network connection.';
+            return false;
+        }
+    }
+
+    // Manual Capture button
+    btnManual.addEventListener('click', async function () {
+        btnManual.disabled = true;
+        guidanceText.innerText = 'Analyzing frame...';
+        await submitSample(currentSampleIndex);
+        btnManual.disabled = false;
+    });
+
+    // Auto Capture Sequence (5 Angles)
+    const prompts = [
+        "1/5: Look directly at the camera (Front Pose)",
+        "2/5: Turn head slightly to the LEFT",
+        "3/5: Turn head slightly to the RIGHT",
+        "4/5: Tilt head slightly UP",
+        "5/5: Smile naturally at the camera"
+    ];
+
+    btnAuto.addEventListener('click', async function () {
+        btnAuto.disabled = true;
+        btnManual.disabled = true;
+
+        for (let i = 1; i <= 5; i++) {
+            guidanceText.innerText = prompts[i - 1];
+            await new Promise(r => setTimeout(r, 1400));
+            guidanceText.innerText = `Capturing angle ${i}... Hold steady!`;
+            await new Promise(r => setTimeout(r, 600));
+
+            let captured = await submitSample(i);
+            if (!captured) {
+                guidanceText.innerText = `Retrying angle ${i}... Keep centered.`;
+                await new Promise(r => setTimeout(r, 1000));
+                await submitSample(i);
+            }
+        }
+
+        guidanceText.innerText = 'Enrollment complete! Training recognizer...';
+        setTimeout(() => {
+            alert('Face enrollment successfully completed and LBPH recognizer retrained!');
+            window.location.reload();
+        }, 1200);
+    });
+});
+</script>
+{% endblock %}

@@ -1,0 +1,180 @@
+{% extends 'base.html' %}
+
+{% block title %}Shifts &mdash; Smart HRMS{% endblock %}
+{% block page_title %}Shift Management{% endblock %}
+
+{% block content %}
+<div class="d-flex flex-column flex-sm-row justify-content-between align-items-start align-items-sm-center gap-3 mb-4">
+    <div>
+        <h4 class="fw-bold mb-1 text-dark">
+            <i class="bi bi-clock-history text-primary me-2"></i> Work Shifts
+        </h4>
+        <p class="text-muted small mb-0">Configured shift schedules, overnight night shifts, and grace periods (Phase 3)</p>
+    </div>
+    {% if request.user.is_hr_admin %}
+    <div class="d-flex flex-wrap gap-2">
+        <a href="{% url 'shifts:create' %}" class="btn btn-primary btn-sm shadow-sm">
+            <i class="bi bi-plus-circle me-1"></i> Create New Shift
+        </a>
+    </div>
+    {% endif %}
+</div>
+
+<!-- Search & Filters -->
+<div class="card card-stat p-3 mb-4">
+    <form method="get" class="row g-2 align-items-center">
+        <div class="col-md-5">
+            <div class="input-group">
+                <span class="input-group-text bg-white"><i class="bi bi-search text-muted"></i></span>
+                <input type="text" name="q" value="{{ query }}" class="form-control" placeholder="Search shift name, code, or description...">
+            </div>
+        </div>
+        {% if request.user.is_superuser %}
+        <div class="col-md-2">
+            <select name="company" class="form-select">
+                <option value="">All Companies</option>
+                {% for c in companies_list %}
+                    <option value="{{ c.id }}" {% if selected_company == c.id|stringformat:"s" %}selected{% endif %}>{{ c.code }}</option>
+                {% endfor %}
+            </select>
+        </div>
+        {% endif %}
+        <div class="col-md-2">
+            <select name="overnight" class="form-select">
+                <option value="">All Types</option>
+                <option value="yes" {% if selected_overnight == 'yes' %}selected{% endif %}>Overnight Shifts</option>
+                <option value="no" {% if selected_overnight == 'no' %}selected{% endif %}>Standard Same-Day</option>
+            </select>
+        </div>
+        <div class="col-md-2">
+            <select name="status" class="form-select">
+                <option value="">All Statuses</option>
+                <option value="active" {% if selected_status == 'active' %}selected{% endif %}>Active</option>
+                <option value="inactive" {% if selected_status == 'inactive' %}selected{% endif %}>Inactive</option>
+            </select>
+        </div>
+        <div class="col-12 col-md-1 d-flex gap-1">
+            <button type="submit" class="btn btn-primary w-100"><i class="bi bi-filter"></i></button>
+            {% if query or selected_company or selected_overnight or selected_status %}
+                <a href="{% url 'shifts:list' %}" class="btn btn-outline-secondary" title="Clear"><i class="bi bi-x-lg"></i></a>
+            {% endif %}
+        </div>
+    </form>
+</div>
+
+<!-- Shift Cards Grid -->
+<div class="row g-3 mb-4">
+    {% for shift in page_obj %}
+    <div class="col-md-6 col-xl-4">
+        <div class="card card-stat h-100 p-4 d-flex flex-column justify-content-between">
+            <div>
+                <div class="d-flex justify-content-between align-items-start mb-2">
+                    <div>
+                        <h5 class="fw-bold mb-0 text-dark">{{ shift.name }}</h5>
+                        <div class="text-muted small">
+                            <span class="badge bg-light text-dark border">{{ shift.shift_code|default:"SHIFT" }}</span>
+                            <span class="badge bg-primary-subtle text-primary">{{ shift.company.code }}</span>
+                        </div>
+                    </div>
+                    <div>
+                        {% if shift.is_overnight %}
+                            <span class="badge bg-dark-subtle text-dark border border-dark-subtle">
+                                <i class="bi bi-moon-stars-fill me-1 text-warning"></i> Overnight
+                            </span>
+                        {% else %}
+                            <span class="badge bg-light text-muted border">
+                                <i class="bi bi-sun-fill me-1 text-warning"></i> Day Shift
+                            </span>
+                        {% endif %}
+                    </div>
+                </div>
+
+                <!-- Schedule Box -->
+                <div class="p-3 bg-light rounded-3 my-3 text-center border">
+                    <div class="fw-bold fs-5 text-dark font-monospace">
+                        {{ shift.start_time|time:"h:i A" }} &rarr; {{ shift.end_time|time:"h:i A" }}
+                    </div>
+                    <div class="text-muted small mt-1">
+                        Gross Duration: <strong>{{ shift.total_expected_hours }} Hours</strong>
+                    </div>
+                </div>
+
+                <!-- Timing Details -->
+                <div class="small text-muted mb-3">
+                    <div class="d-flex justify-content-between py-1 border-bottom">
+                        <span>Lunch Break:</span>
+                        <span class="fw-semibold text-dark">{{ shift.lunch_duration_minutes }} Minutes</span>
+                    </div>
+                    <div class="d-flex justify-content-between py-1 border-bottom">
+                        <span>Grace Period:</span>
+                        <span class="fw-semibold text-success">{{ shift.grace_period_minutes }} Mins Allowed</span>
+                    </div>
+                    <div class="d-flex justify-content-between py-1 border-bottom">
+                        <span>Overtime:</span>
+                        <span class="fw-semibold text-dark">{% if shift.overtime_eligibility %}Eligible{% else %}No Overtime{% endif %}</span>
+                    </div>
+                    <div class="d-flex justify-content-between py-1">
+                        <span>Assigned Staff:</span>
+                        <span class="badge bg-primary">{{ shift.assigned_count }} Employees</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Actions -->
+            <div class="d-flex flex-wrap gap-2 pt-2 border-top">
+                <a href="{% url 'shifts:detail' shift.pk %}" class="btn btn-outline-primary btn-sm flex-grow-1">
+                    <i class="bi bi-eye me-1"></i> Details
+                </a>
+                {% if request.user.is_hr_admin %}
+                <a href="{% url 'shifts:assign' shift.pk %}" class="btn btn-outline-success btn-sm" title="Assign to Employees">
+                    <i class="bi bi-person-check"></i> Assign
+                </a>
+                <a href="{% url 'shifts:edit' shift.pk %}" class="btn btn-outline-secondary btn-sm" title="Edit Shift">
+                    <i class="bi bi-pencil"></i>
+                </a>
+                {% if shift.assigned_count == 0 %}
+                <a href="{% url 'shifts:delete' shift.pk %}" class="btn btn-outline-danger btn-sm" title="Delete Shift">
+                    <i class="bi bi-trash"></i>
+                </a>
+                {% endif %}
+                {% endif %}
+            </div>
+        </div>
+    </div>
+    {% empty %}
+    <div class="col-12">
+        <div class="card card-stat p-5 text-center text-muted">
+            <i class="bi bi-clock fs-1 mb-2"></i>
+            <h5>No Shifts Configured</h5>
+            <p class="small mb-3">Create configurable 8h, 12h, 24h, or custom shifts for your workforce.</p>
+            {% if request.user.is_hr_admin %}
+            <div>
+                <a href="{% url 'shifts:create' %}" class="btn btn-primary btn-sm">
+                    <i class="bi bi-plus-circle me-1"></i> Create First Shift
+                </a>
+            </div>
+            {% endif %}
+        </div>
+    </div>
+    {% endfor %}
+</div>
+
+<!-- Pagination -->
+{% if page_obj.has_other_pages %}
+<nav class="d-flex justify-content-center">
+    <ul class="pagination pagination-sm">
+        {% if page_obj.has_previous %}
+            <li class="page-item"><a class="page-link" href="?page={{ page_obj.previous_page_number }}{% if query %}&q={{ query }}{% endif %}">&laquo;</a></li>
+        {% endif %}
+        {% for num in page_obj.paginator.page_range %}
+            <li class="page-item {% if page_obj.number == num %}active{% endif %}">
+                <a class="page-link" href="?page={{ num }}{% if query %}&q={{ query }}{% endif %}">{{ num }}</a>
+            </li>
+        {% endfor %}
+        {% if page_obj.has_next %}
+            <li class="page-item"><a class="page-link" href="?page={{ page_obj.next_page_number }}{% if query %}&q={{ query }}{% endif %}">&raquo;</a></li>
+        {% endif %}
+    </ul>
+</nav>
+{% endif %}
+{% endblock %}

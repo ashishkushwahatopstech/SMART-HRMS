@@ -1,0 +1,90 @@
+{% extends 'base.html' %}
+
+{% block title %}Delete Attendance Record: {{ attendance.employee.get_full_name }} &mdash; Smart HRMS{% endblock %}
+{% block page_title %}Confirm Attendance Record Deletion{% endblock %}
+
+{% block content %}
+<div class="row justify-content-center">
+    <div class="col-lg-8 col-xl-7">
+        <div class="card card-stat border-danger border-2 p-4 shadow-sm mb-4">
+            <div class="d-flex align-items-center gap-3 mb-3 text-danger">
+                <i class="bi bi-shield-exclamation fs-1"></i>
+                <div>
+                    <h5 class="fw-bold mb-0">Compliance Notice: Attendance Record Deletion</h5>
+                    <p class="small text-muted mb-0">Blockchain Ledger Protected Corporate Governance</p>
+                </div>
+            </div>
+
+            <div class="alert alert-warning border small mb-4">
+                <i class="bi bi-info-circle-fill me-1"></i>
+                <strong>Notice on Transparency:</strong> While this active attendance record will be permanently deleted from the employee's active roster, a <strong>cryptographically signed SHA-256 snapshot</strong> will be permanently minted into the <strong>Campus Audit Ledger</strong>. All campus staff will be able to see who authorized this deletion and why.
+            </div>
+
+            <!-- Record Breakdown Card -->
+            <div class="card bg-light border p-3 mb-4">
+                <div class="d-flex justify-content-between align-items-center mb-2">
+                    <span class="fw-bold text-dark fs-6">{{ attendance.employee.get_full_name }}</span>
+                    <span class="badge {{ attendance.get_status_badge_class }}">{{ attendance.get_status_display }}</span>
+                </div>
+                <div class="row g-2 small text-muted">
+                    <div class="col-sm-6">
+                        <strong>Employee ID:</strong> <span class="font-monospace text-dark">{{ attendance.employee.employee_id }}</span>
+                    </div>
+                    <div class="col-sm-6">
+                        <strong>Company:</strong> <span class="text-dark">{{ attendance.company.name }}</span>
+                    </div>
+                    <div class="col-sm-6">
+                        <strong>Work Date:</strong> <span class="text-dark">{{ attendance.date|date:"l, d F Y" }}</span>
+                    </div>
+                    <div class="col-sm-6">
+                        <strong>Verification:</strong> <span class="text-dark">{{ attendance.get_verification_method_display }}</span>
+                    </div>
+                    <div class="col-sm-6">
+                        <strong>Check-In:</strong> <span class="text-dark font-monospace">{{ attendance.check_in_time|date:"h:i:s A"|default:"None" }}</span>
+                    </div>
+                    <div class="col-sm-6">
+                        <strong>Check-Out:</strong> <span class="text-dark font-monospace">{{ attendance.check_out_time|date:"h:i:s A"|default:"None" }}</span>
+                    </div>
+                    <div class="col-sm-6">
+                        <strong>Hours Worked:</strong> <span class="text-dark fw-bold">{{ attendance.total_working_hours }} hrs</span>
+                    </div>
+                    <div class="col-sm-6">
+                        <strong>Overtime:</strong> <span class="text-dark">{{ attendance.overtime_hours }} hrs</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Mandatory Justification Form -->
+            <form method="post" action="{% url 'attendance:delete' attendance.pk %}">
+                {% csrf_token %}
+                <input type="hidden" name="next" value="{{ next_url }}">
+
+                <div class="mb-4">
+                    <label for="reason" class="form-label fw-bold small text-dark">
+                        Mandatory Business Reason / Deletion Justification <span class="text-danger">*</span>
+                    </label>
+                    <textarea 
+                        name="reason" 
+                        id="reason" 
+                        rows="3" 
+                        class="form-control" 
+                        placeholder="State the compliance reason for deleting this attendance record (e.g. Employee was on approved official travel, duplicate accidental punch, etc.)..."
+                        required></textarea>
+                    <div class="form-text small">
+                        This explanation will be recorded permanently in the public campus blockchain ledger under your operator signature ({{ request.user.get_display_name }}).
+                    </div>
+                </div>
+
+                <div class="d-flex justify-content-between align-items-center">
+                    <a href="{{ next_url }}" class="btn btn-outline-secondary">
+                        <i class="bi bi-x-lg me-1"></i> Cancel & Keep Record
+                    </a>
+                    <button type="submit" class="btn btn-danger px-4 shadow-sm">
+                        <i class="bi bi-trash3-fill me-1"></i> Confirm & Mint to Ledger
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+{% endblock %}

@@ -1,0 +1,173 @@
+{% extends 'base.html' %}
+
+{% block title %}Attendance: {{ attendance.employee.get_full_name }} ({{ attendance.date }}) &mdash; Smart HRMS{% endblock %}
+{% block page_title %}Attendance Record Details{% endblock %}
+
+{% block content %}
+<div class="row g-4">
+    <!-- Left Column: Attendance Record Breakdown -->
+    <div class="col-lg-7">
+        <div class="card card-stat p-4 mb-4">
+            <div class="d-flex justify-content-between align-items-start mb-3">
+                <div class="d-flex align-items-center gap-3">
+                    <span class="avatar-circle bg-primary-subtle text-primary fw-bold fs-4">
+                        {{ attendance.employee.first_name|first }}{{ attendance.employee.last_name|first }}
+                    </span>
+                    <div>
+                        <h4 class="fw-bold mb-1 text-dark">{{ attendance.employee.get_full_name }}</h4>
+                        <div class="text-muted small">
+                            <span class="badge bg-light text-dark border">{{ attendance.employee.employee_id }}</span>
+                            <span class="badge bg-primary-subtle text-primary">{{ attendance.employee.department.name|default:"General" }}</span>
+                            <span class="badge bg-secondary-subtle text-secondary">{{ attendance.company.name }}</span>
+                        </div>
+                    </div>
+                </div>
+                <div>
+                    <span class="badge {{ attendance.get_status_badge_class }} fs-6">
+                        {{ attendance.get_status_display }}
+                    </span>
+                </div>
+            </div>
+
+            <!-- Date & Verification Banner -->
+            <div class="p-3 bg-light rounded-3 border my-3">
+                <div class="d-flex justify-content-between align-items-center">
+                    <div>
+                        <div class="text-muted small">Calendar Work Date</div>
+                        <div class="fs-5 fw-bold text-dark">{{ attendance.date|date:"l, d F Y" }}</div>
+                    </div>
+                    <div class="text-end">
+                        <div class="text-muted small">Verification Method</div>
+                        <span class="badge bg-white text-dark border fw-semibold">
+                            <i class="bi bi-shield-check text-success me-1"></i> {{ attendance.get_verification_method_display }}
+                        </span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Punch Times Breakdown -->
+            <div class="row g-3 mb-4 text-center">
+                <div class="col-6">
+                    <div class="p-3 border rounded-3 bg-white">
+                        <div class="text-muted small mb-1">Check-In Time</div>
+                        <div class="fs-4 fw-bold text-success font-monospace">
+                            {{ attendance.check_in_time|date:"h:i:s A"|default:"&mdash;" }}
+                        </div>
+                        {% if attendance.is_late %}
+                            <span class="badge bg-warning text-dark mt-1">
+                                <i class="bi bi-exclamation-triangle-fill me-1"></i> Late by {{ attendance.late_minutes }} Mins
+                            </span>
+                        {% elif attendance.check_in_time %}
+                            <span class="badge bg-success-subtle text-success mt-1">
+                                <i class="bi bi-check-circle-fill me-1"></i> On Time
+                            </span>
+                        {% endif %}
+                    </div>
+                </div>
+                <div class="col-6">
+                    <div class="p-3 border rounded-3 bg-white">
+                        <div class="text-muted small mb-1">Check-Out Time</div>
+                        <div class="fs-4 fw-bold text-primary font-monospace">
+                            {{ attendance.check_out_time|date:"h:i:s A"|default:"&mdash;" }}
+                        </div>
+                        {% if attendance.is_early_departure %}
+                            <span class="badge bg-danger-subtle text-danger mt-1">
+                                <i class="bi bi-arrow-down-left-circle me-1"></i> Early Departure (-{{ attendance.early_departure_minutes }}m)
+                            </span>
+                        {% elif attendance.check_out_time %}
+                            <span class="badge bg-light text-muted border mt-1">Shift Fulfilled</span>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+
+            <!-- Working Duration Metrics -->
+            <div class="small text-muted mb-4">
+                <div class="d-flex justify-content-between py-2 border-bottom">
+                    <span>Shift Schedule:</span>
+                    <strong class="text-dark">
+                        {{ attendance.shift.name|default:"Standard Day" }}
+                        ({{ attendance.shift.start_time|time:"h:i A" }} &ndash; {{ attendance.shift.end_time|time:"h:i A" }})
+                    </strong>
+                </div>
+                <div class="d-flex justify-content-between py-2 border-bottom">
+                    <span>Expected Shift Working Duration:</span>
+                    <strong class="text-dark">{{ attendance.shift.total_expected_hours|default:"8.00" }} Hours</strong>
+                </div>
+                <div class="d-flex justify-content-between py-2 border-bottom">
+                    <span>Actual Duration Worked:</span>
+                    <strong class="text-success fs-6">{{ attendance.total_working_hours }} Hours</strong>
+                </div>
+                <div class="d-flex justify-content-between py-2 border-bottom">
+                    <span>Overtime Hours Approved:</span>
+                    <strong class="text-primary">{{ attendance.overtime_hours }} Hours</strong>
+                </div>
+                {% if attendance.ip_address %}
+                <div class="d-flex justify-content-between py-2 border-bottom">
+                    <span>Punch IP Address:</span>
+                    <span class="font-monospace text-dark">{{ attendance.ip_address }}</span>
+                </div>
+                {% endif %}
+                {% if attendance.notes %}
+                <div class="py-2">
+                    <span class="d-block mb-1">Notes / Reason:</span>
+                    <div class="p-2 bg-light rounded text-dark fst-italic">{{ attendance.notes }}</div>
+                </div>
+                {% endif %}
+            </div>
+
+            <div class="d-flex flex-wrap gap-2">
+                <a href="{% url 'attendance:list' %}" class="btn btn-outline-secondary btn-sm">
+                    <i class="bi bi-arrow-left me-1"></i> Back to Attendance Log
+                </a>
+                {% if request.user.is_hr_admin %}
+                <a href="{% url 'attendance:edit' attendance.pk %}" class="btn btn-primary btn-sm">
+                    <i class="bi bi-pencil me-1"></i> Adjust Record
+                </a>
+                <a href="{% url 'attendance:delete' attendance.pk %}" class="btn btn-outline-danger btn-sm">
+                    <i class="bi bi-trash me-1"></i> Delete Record
+                </a>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+
+    <!-- Right Column: Compliance Audit Trail -->
+    <div class="col-lg-5">
+        <div class="card card-stat p-4 h-100">
+            <h5 class="fw-bold mb-3 text-dark">
+                <i class="bi bi-shield-lock text-primary me-2"></i> Compliance Audit Trail
+            </h5>
+            <p class="text-muted small">Immutable log tracking manual adjustments, timestamps, and business justification.</p>
+
+            <div class="audit-timeline mt-3">
+                {% for log in audit_logs %}
+                <div class="border-start border-primary border-3 ps-3 pb-3 mb-3 position-relative">
+                    <div class="d-flex justify-content-between align-items-baseline">
+                        <span class="fw-bold text-dark small">{{ log.action }}</span>
+                        <span class="text-muted" style="font-size: 0.75rem;">{{ log.created_at|date:"d M Y, h:i A" }}</span>
+                    </div>
+                    <div class="text-muted small mt-1">
+                        By: <strong>{{ log.changed_by.get_display_name|default:"System" }}</strong>
+                        ({{ log.changed_by.get_role_display|default:"Automated" }})
+                    </div>
+                    <div class="p-2 bg-light rounded mt-2 small text-dark border">
+                        <strong>Reason:</strong> {{ log.reason }}
+                    </div>
+                    {% if log.new_value %}
+                    <div class="text-muted mt-1 font-monospace" style="font-size: 0.7rem;">
+                        {{ log.new_value }}
+                    </div>
+                    {% endif %}
+                </div>
+                {% empty %}
+                <div class="text-center py-4 text-muted">
+                    <i class="bi bi-check-all fs-2 text-success"></i>
+                    <p class="small mt-2 mb-0">Original automated punch record.<br>No manual adjustments have occurred.</p>
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

@@ -1,0 +1,182 @@
+<aside class="sidebar" id="appSidebar">
+    <!-- Brand / Logo Header -->
+    <div class="brand-header">
+        <a href="{% url 'dashboard:index' %}" class="brand-title">
+            <div class="brand-logo-icon">
+                <i class="bi bi-person-bounding-box fs-5"></i>
+            </div>
+            <span>Smart HRMS</span>
+            <span class="brand-badge">v1.0</span>
+        </a>
+        <button type="button" class="btn-close-sidebar" id="sidebarClose" title="Close Menu">
+            <i class="bi bi-x-lg"></i>
+        </button>
+    </div>
+
+    <!-- Navigation List -->
+    <div class="sidebar-nav">
+        <div class="sidebar-section-title">Core</div>
+        <a href="{% url 'dashboard:index' %}" class="sidebar-link{% if request.resolver_match.url_name == 'index' and request.resolver_match.app_name == 'dashboard' %} active{% endif %}">
+            <i class="bi bi-grid-1x2-fill"></i>
+            <span>Dashboard</span>
+        </a>
+        {% if request.user.role in 'super_admin,hr_admin,manager' %}
+        <a href="{% url 'attendance:face_kiosk' %}" class="sidebar-link sidebar-kiosk-pill">
+            <i class="bi bi-camera-video-fill"></i>
+            <span>Face Cam Attendance</span>
+            <span class="badge bg-danger text-white ms-auto" style="font-size: 0.65rem;">Universal</span>
+        </a>
+        {% endif %}
+
+        {% if request.user.is_hr_admin %}
+        <div class="sidebar-section-title">Organization & People</div>
+        <a href="{% url 'companies:list' %}" class="sidebar-link">
+            <i class="bi bi-buildings"></i>
+            <span>Companies</span>
+        </a>
+        <a href="{% url 'employees:list' %}" class="sidebar-link">
+            <i class="bi bi-people"></i>
+            <span>Employees</span>
+        </a>
+        <a href="{% url 'employees:user_roles' %}" class="sidebar-link">
+            <i class="bi bi-shield-lock"></i>
+            <span>User Roles & Access</span>
+        </a>
+        <a href="{% url 'employees:departments' %}" class="sidebar-link">
+            <i class="bi bi-diagram-3"></i>
+            <span>Departments</span>
+        </a>
+        <a href="{% url 'employees:designations' %}" class="sidebar-link">
+            <i class="bi bi-award"></i>
+            <span>Designations</span>
+        </a>
+        <a href="{% url 'shifts:list' %}" class="sidebar-link">
+            <i class="bi bi-clock-history"></i>
+            <span>Shifts</span>
+        </a>
+
+        <div class="sidebar-section-title">Attendance & Biometrics</div>
+        <a href="{% url 'attendance:list' %}" class="sidebar-link">
+            <i class="bi bi-calendar-check"></i>
+            <span>Attendance Log</span>
+        </a>
+        <a href="{% url 'attendance:create' %}" class="sidebar-link">
+            <i class="bi bi-pencil-square"></i>
+            <span>Manual Attendance</span>
+        </a>
+        <a href="{% url 'attendance:requests_list' %}" class="sidebar-link">
+            <i class="bi bi-clock-history"></i>
+            <span>Punch Requests</span>
+        </a>
+        <a href="{% url 'attendance:audit_ledger' %}" class="sidebar-link">
+            <i class="bi bi-link-45deg"></i>
+            <span>Campus Audit Ledger</span>
+            <span class="badge bg-success-subtle text-success border border-success-subtle" style="font-size: 0.65rem;">Chain</span>
+        </a>
+
+        <div class="sidebar-section-title">Leaves & Holidays</div>
+        <a href="{% url 'holidays:calendar' %}" class="sidebar-link">
+            <i class="bi bi-calendar2-event"></i>
+            <span>Holiday Calendar</span>
+        </a>
+        <a href="{% url 'leaves:dashboard' %}" class="sidebar-link">
+            <i class="bi bi-speedometer2"></i>
+            <span>Leave Portal</span>
+        </a>
+        <a href="{% url 'leaves:list' %}" class="sidebar-link">
+            <i class="bi bi-journal-medical"></i>
+            <span>Leave Requests</span>
+        </a>
+
+        <div class="sidebar-section-title">Finance & Payroll</div>
+        <a href="{% url 'payroll:dashboard' %}" class="sidebar-link">
+            <i class="bi bi-cash-stack"></i>
+            <span>Payroll Engine</span>
+        </a>
+        <a href="{% url 'reports:dashboard' %}" class="sidebar-link">
+            <i class="bi bi-file-earmark-spreadsheet"></i>
+            <span>Reports & Exports</span>
+        </a>
+        {% endif %}
+
+        {% if request.user.is_manager_user %}
+        <div class="sidebar-section-title">Team Management</div>
+        <a href="{% url 'employees:list' %}" class="sidebar-link">
+            <i class="bi bi-person-lines-fill"></i>
+            <span>Assigned Team</span>
+        </a>
+        <a href="{% url 'employees:departments' %}" class="sidebar-link">
+            <i class="bi bi-diagram-3"></i>
+            <span>Departments</span>
+        </a>
+        <a href="{% url 'employees:designations' %}" class="sidebar-link">
+            <i class="bi bi-award"></i>
+            <span>Designations</span>
+        </a>
+        <a href="{% url 'leaves:list' %}" class="sidebar-link">
+            <i class="bi bi-check2-circle"></i>
+            <span>Team Leaves</span>
+        </a>
+        <a href="{% url 'attendance:list' %}" class="sidebar-link">
+            <i class="bi bi-calendar3"></i>
+            <span>Team Attendance</span>
+        </a>
+        <a href="{% url 'attendance:requests_list' %}" class="sidebar-link">
+            <i class="bi bi-clock-history"></i>
+            <span>Team Punch Requests</span>
+        </a>
+        {% endif %}
+
+        <div class="sidebar-section-title">Self Service</div>
+        <a href="{% url 'accounts:profile' %}" class="sidebar-link">
+            <i class="bi bi-person-circle"></i>
+            <span>My Profile</span>
+        </a>
+        <a href="{% url 'attendance:my_attendance' %}" class="sidebar-link">
+            <i class="bi bi-calendar-event"></i>
+            <span>My Attendance</span>
+        </a>
+        <a href="{% url 'attendance:my_attendance' %}?punch=camera" class="sidebar-link text-success fw-semibold">
+            <i class="bi bi-camera-video-fill text-success"></i>
+            <span>Self Camera Punch</span>
+        </a>
+        <a href="{% url 'attendance:request_create' %}" class="sidebar-link">
+            <i class="bi bi-clock-history"></i>
+            <span>Request Missed Punch</span>
+        </a>
+        <a href="{% url 'leaves:apply' %}" class="sidebar-link">
+            <i class="bi bi-envelope-paper"></i>
+            <span>Apply Leave</span>
+        </a>
+        <a href="{% url 'payroll:my_payslips' %}" class="sidebar-link">
+            <i class="bi bi-receipt"></i>
+            <span>My Payslips</span>
+        </a>
+
+        <div class="sidebar-section-title">Account</div>
+        <a href="{% url 'accounts:change_password' %}" class="sidebar-link">
+            <i class="bi bi-shield-lock"></i>
+            <span>Change Password</span>
+        </a>
+        <a href="{% url 'accounts:logout' %}" class="sidebar-link text-danger">
+            <i class="bi bi-box-arrow-right"></i>
+            <span>Logout</span>
+        </a>
+    </div>
+
+    <!-- Sidebar Footer -->
+    <div class="sidebar-footer">
+        <div class="d-flex align-items-center gap-2">
+            {% if request.user.avatar %}
+                <img src="{{ request.user.avatar.url }}" alt="{{ request.user.get_display_name }}" class="avatar-circle">
+            {% else %}
+                <span class="avatar-circle">{{ request.user.username|make_list|first|upper }}</span>
+            {% endif %}
+            <div class="text-truncate" style="max-width: 150px;">
+                <div class="text-light fw-bold small text-truncate">{{ request.user.get_display_name }}</div>
+                <div class="text-muted text-truncate" style="font-size: 0.75rem;">{{ request.user.get_role_display }}</div>
+            </div>
+        </div>
+    </div>
+</aside>
+<div class="sidebar-backdrop" id="sidebarBackdrop"></div>

@@ -1,0 +1,284 @@
+{% extends 'base.html' %}
+
+{% block title %}Payslip &mdash; {{ payslip.employee.get_full_name }} ({{ payslip.month_name }}) &mdash; Smart HRMS{% endblock %}
+{% block page_title %}Employee Payslip{% endblock %}
+
+{% block extra_css %}
+<style>
+@media print {
+    /* Hide topbar, sidebar, actions and footer */
+    .sidebar, .topbar, .btn, .no-print, header, footer {
+        display: none !important;
+    }
+    .main-content {
+        margin: 0 !important;
+        padding: 0 !important;
+    }
+    .card {
+        border: none !important;
+        box-shadow: none !important;
+    }
+    body {
+        background-color: #fff !important;
+        color: #000 !important;
+        font-size: 12pt;
+    }
+    .payslip-container {
+        border: 2px solid #000 !important;
+        padding: 20px !important;
+        width: 100% !important;
+    }
+}
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4 no-print">
+    <div>
+        <a href="{% url 'payroll:run_detail' payslip.payroll_run.id %}" class="text-decoration-none text-muted small">
+            <i class="bi bi-arrow-left me-1"></i> Back to Payroll Register
+        </a>
+    </div>
+    <div class="d-flex gap-2">
+        <button onclick="window.print()" class="btn btn-primary btn-sm shadow-sm">
+            <i class="bi bi-printer me-1"></i> Print Payslip
+        </button>
+    </div>
+</div>
+
+<!-- Corporate Payslip Document Card -->
+<div class="card card-stat p-4 p-md-5 mx-auto payslip-container" style="max-width: 900px; border-top: 5px solid #0d6efd;">
+    <!-- Company Header -->
+    <div class="row align-items-center pb-4 mb-3 border-bottom">
+        <div class="col-12 col-sm-8">
+            <h3 class="fw-bold mb-1 text-dark">{{ payslip.company.name }}</h3>
+            <p class="text-muted small mb-0">{{ payslip.company.address|default:"Corporate IT Park, Industrial Area" }}</p>
+            <p class="text-muted small mb-0">Email: {{ payslip.company.email|default:"payroll@smarthrms.local" }} &bull; Phone: {{ payslip.company.phone|default:"+91 22 4567 8900" }}</p>
+        </div>
+        <div class="col-12 col-sm-4 text-sm-end mt-2 mt-sm-0">
+            <span class="badge bg-light text-dark border px-3 py-2 fs-6">PAYSLIP</span>
+            <div class="text-muted small mt-1 fw-bold">{{ payslip.month_name|upper }}</div>
+        </div>
+    </div>
+
+    <!-- Employee Information Grid -->
+    <div class="row g-3 mb-4 pb-3 border-bottom">
+        <div class="col-sm-6">
+            <table class="table table-sm table-borderless mb-0 small">
+                <tr>
+                    <td class="text-muted" style="width: 140px;">Employee ID:</td>
+                    <td class="fw-bold text-dark">{{ payslip.employee.employee_id }}</td>
+                </tr>
+                <tr>
+                    <td class="text-muted">Employee Name:</td>
+                    <td class="fw-bold text-dark">{{ payslip.employee.get_full_name }}</td>
+                </tr>
+                <tr>
+                    <td class="text-muted">Department:</td>
+                    <td>{{ payslip.employee.department.name }}</td>
+                </tr>
+                <tr>
+                    <td class="text-muted">Designation:</td>
+                    <td>{{ payslip.employee.designation.title }}</td>
+                </tr>
+            </table>
+        </div>
+        <div class="col-sm-6">
+            <table class="table table-sm table-borderless mb-0 small">
+                <tr>
+                    <td class="text-muted" style="width: 140px;">Joining Date:</td>
+                    <td>{{ payslip.employee.joining_date|date:"d M Y" }}</td>
+                </tr>
+                <tr>
+                    <td class="text-muted">Assigned Shift:</td>
+                    <td>{{ payslip.employee.assigned_shift_name }}</td>
+                </tr>
+                <tr>
+                    <td class="text-muted">Payment Mode:</td>
+                    <td>Bank Transfer (NEFT)</td>
+                </tr>
+                <tr>
+                    <td class="text-muted">Payment Status:</td>
+                    <td>
+                        {% if payslip.payment_status == 'paid' %}
+                        <span class="badge bg-success">Disbursed ({{ payslip.payment_reference|default:"Direct Transfer" }})</span>
+                        {% else %}
+                        <span class="badge bg-warning text-dark">Pending Disbursal</span>
+                        {% endif %}
+                    </td>
+                </tr>
+            </table>
+        </div>
+    </div>
+
+    <!-- Attendance Metrics Row -->
+    <div class="row g-2 text-center mb-2 p-2 bg-light rounded border">
+        <div class="col">
+            <div class="text-muted" style="font-size: 0.75rem;">Calendar Days</div>
+            <div class="fw-bold fs-6">{{ payslip.calendar_days }}</div>
+        </div>
+        <div class="col">
+            <div class="text-muted" style="font-size: 0.75rem;">Working Days</div>
+            <div class="fw-bold fs-6">{{ payslip.working_days }}</div>
+        </div>
+        <div class="col">
+            <div class="text-muted" style="font-size: 0.75rem;">Days Present</div>
+            <div class="fw-bold fs-6 text-success">{{ payslip.days_present }}</div>
+        </div>
+        <div class="col">
+            <div class="text-muted" style="font-size: 0.75rem;">Paid Leaves</div>
+            <div class="fw-bold fs-6">{{ payslip.paid_leaves }}</div>
+        </div>
+        <div class="col">
+            <div class="text-muted" style="font-size: 0.75rem;">Unpaid (LOP)</div>
+            <div class="fw-bold fs-6 text-danger">{{ payslip.unpaid_leaves }}</div>
+        </div>
+        <div class="col">
+            <div class="text-muted" style="font-size: 0.75rem;">Overtime Hours</div>
+            <div class="fw-bold fs-6 text-info">{{ payslip.overtime_hours }}h</div>
+        </div>
+    </div>
+
+    <!-- Policy & Rate Details Banner -->
+    <div class="mb-4 px-3 py-2 bg-white rounded border d-flex flex-wrap justify-content-between align-items-center small text-muted">
+        <div>
+            <i class="bi bi-info-circle text-primary me-1"></i>
+            {% if payslip.company.salary_calculation_policy == 'fixed_26_days' or payslip.company.salary_calculation_policy == 'working_hours' %}
+            Policy: <span class="fw-bold text-dark">Fixed 26 Days</span> &bull; Salary calculated on <strong>actual working hours</strong>
+            {% elif payslip.company.salary_calculation_policy == 'fixed_30_days' %}
+            Policy: <span class="fw-bold text-dark">Fixed 30 Days</span> &bull; Based on <strong>attendance marks + in-between Sundays</strong>
+            {% else %}
+            Policy: <span class="fw-bold text-dark">{{ payslip.company.get_salary_calculation_policy_display }}</span>
+            {% endif %}
+        </div>
+        <div class="d-flex gap-3">
+            <span>Daily Rate: <strong class="text-dark">&#8377;{{ payslip.per_day_rate }}</strong></span>
+            <span>Hourly Rate: <strong class="text-dark">&#8377;{{ payslip.hourly_rate }}/hr</strong></span>
+        </div>
+    </div>
+
+    <!-- Earnings vs Deductions Table -->
+    <div class="row g-4 mb-4">
+        <!-- Earnings Column -->
+        <div class="col-sm-6">
+            <h6 class="fw-bold text-dark mb-2 pb-1 border-bottom"><i class="bi bi-plus-circle text-success me-1"></i> Earnings</h6>
+            <table class="table table-sm table-hover mb-0 small">
+                <tbody>
+                    <tr>
+                        <td>Basic Salary</td>
+                        <td class="text-end fw-semibold">&#8377;{{ payslip.basic_salary|floatformat:2 }}</td>
+                    </tr>
+                    <tr>
+                        <td>House Rent Allowance (HRA)</td>
+                        <td class="text-end fw-semibold">&#8377;{{ payslip.hra|floatformat:2 }}</td>
+                    </tr>
+                    <tr>
+                        <td>Conveyance Allowance</td>
+                        <td class="text-end fw-semibold">&#8377;{{ payslip.conveyance|floatformat:2 }}</td>
+                    </tr>
+                    <tr>
+                        <td>Special Allowance</td>
+                        <td class="text-end fw-semibold">&#8377;{{ payslip.special_allowance|floatformat:2 }}</td>
+                    </tr>
+                    {% if payslip.overtime_pay > 0 %}
+                    <tr class="table-info">
+                        <td>Overtime Pay ({{ payslip.overtime_hours }} hrs @ 1.5x)</td>
+                        <td class="text-end fw-bold text-info">&#8377;{{ payslip.overtime_pay|floatformat:2 }}</td>
+                    </tr>
+                    {% endif %}
+                    {% if payslip.bonus > 0 %}
+                    <tr>
+                        <td>Performance Bonus / Incentive</td>
+                        <td class="text-end fw-semibold">&#8377;{{ payslip.bonus|floatformat:2 }}</td>
+                    </tr>
+                    {% endif %}
+                </tbody>
+                <tfoot class="border-top table-light">
+                    <tr class="fw-bold">
+                        <td>Total Gross Earnings</td>
+                        <td class="text-end text-dark fs-6">&#8377;{{ payslip.gross_earnings|floatformat:2 }}</td>
+                    </tr>
+                </tfoot>
+            </table>
+        </div>
+
+        <!-- Deductions Column -->
+        <div class="col-sm-6">
+            <h6 class="fw-bold text-dark mb-2 pb-1 border-bottom"><i class="bi bi-dash-circle text-danger me-1"></i> Deductions</h6>
+            <table class="table table-sm table-hover mb-0 small">
+                <tbody>
+                    <tr>
+                        <td>Loss of Pay (LOP / Unpaid Days)</td>
+                        <td class="text-end fw-semibold text-danger">&#8377;{{ payslip.loss_of_pay_deduction|floatformat:2 }}</td>
+                    </tr>
+                    <tr>
+                        <td>Provident Fund (PF)</td>
+                        <td class="text-end fw-semibold">&#8377;{{ payslip.provident_fund|floatformat:2 }}</td>
+                    </tr>
+                    <tr>
+                        <td>Employee State Insurance (ESI)</td>
+                        <td class="text-end fw-semibold">&#8377;{{ payslip.esi|floatformat:2 }}</td>
+                    </tr>
+                    <tr>
+                        <td>Professional Tax (PT)</td>
+                        <td class="text-end fw-semibold">&#8377;{{ payslip.professional_tax|floatformat:2 }}</td>
+                    </tr>
+                    {% if payslip.tds > 0 %}
+                    <tr>
+                        <td>TDS / Tax Deduction</td>
+                        <td class="text-end fw-semibold">&#8377;{{ payslip.tds|floatformat:2 }}</td>
+                    </tr>
+                    {% endif %}
+                </tbody>
+                <tfoot class="border-top table-light">
+                    <tr class="fw-bold">
+                        <td>Total Deductions</td>
+                        <td class="text-end text-danger fs-6">&#8377;{{ payslip.total_deductions|floatformat:2 }}</td>
+                    </tr>
+                </tfoot>
+            </table>
+        </div>
+    </div>
+
+    <!-- Net Salary Box -->
+    <div class="card p-3 bg-light border-2 border-primary mb-3 text-center">
+        <div class="text-muted small fw-bold text-uppercase">Net Salary Payable</div>
+        <div class="fs-2 fw-bold text-success my-1">&#8377;{{ payslip.net_pay|floatformat:2 }}</div>
+        <div class="text-muted small fw-semibold">({{ payslip.net_pay_in_words }})</div>
+    </div>
+
+    <!-- Sign-off Disclaimer -->
+    <div class="row pt-4 text-muted small border-top">
+        <div class="col-6">
+            <div class="fw-bold">Employer Authorization</div>
+            <div class="mt-4 pt-3 border-top d-inline-block text-center" style="width: 180px;">Authorized Signatory</div>
+        </div>
+        <div class="col-6 text-end">
+            <div class="fw-bold">System Verification</div>
+            <div class="mt-4 pt-3 border-top d-inline-block text-center" style="width: 180px;">Computer Generated Slip</div>
+        </div>
+    </div>
+</div>
+
+<!-- Admin Payment Disbursal Modal / Controls -->
+{% if can_update_payment %}
+<div class="card card-stat p-3 mt-4 mx-auto no-print" style="max-width: 900px;">
+    <h6 class="fw-bold text-dark mb-2"><i class="bi bi-credit-card me-1 text-primary"></i> Update Disbursal Status</h6>
+    <form method="post" action="{% url 'payroll:update_payment' payslip.id %}" class="row g-2 align-items-center">
+        {% csrf_token %}
+        <div class="col-md-3">
+            {{ payment_form.payment_status }}
+        </div>
+        <div class="col-md-3">
+            {{ payment_form.payment_date }}
+        </div>
+        <div class="col-md-4">
+            {{ payment_form.payment_reference }}
+        </div>
+        <div class="col-md-2">
+            <button type="submit" class="btn btn-primary btn-sm w-100">Update</button>
+        </div>
+    </form>
+</div>
+{% endif %}
+{% endblock %}

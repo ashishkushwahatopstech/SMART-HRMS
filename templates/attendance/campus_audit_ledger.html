@@ -1,0 +1,426 @@
+{% extends 'base.html' %}
+
+{% block title %}Campus Attendance Audit Ledger &mdash; Smart HRMS{% endblock %}
+{% block page_title %}Campus Attendance Audit Ledger{% endblock %}
+
+{% block content %}
+<div class="d-flex flex-column flex-sm-row justify-content-between align-items-start align-items-sm-center gap-3 mb-4">
+    <div>
+        <div class="d-flex align-items-center gap-2 mb-1">
+            <span class="badge bg-success-subtle text-success border border-success-subtle font-monospace px-2 py-1">
+                <i class="bi bi-link-45deg me-1"></i> SHA-256 BLOCKCHAIN LEDGER
+            </span>
+            <span class="badge bg-primary-subtle text-primary border border-primary-subtle">
+                <i class="bi bi-eye-fill me-1"></i> Campus Public Transparency
+            </span>
+        </div>
+        <h4 class="fw-bold mb-1 text-dark">
+            <i class="bi bi-shield-check text-primary me-2"></i> Campus Attendance Audit Ledger
+        </h4>
+        <p class="text-muted small mb-0">
+            Immutable, cryptographically chained activity ledger. Tracks every creation, manual modification, regularization, and deletion across campus personnel.
+        </p>
+    </div>
+    <div class="d-flex align-items-center gap-2">
+        {% if request.user.is_superuser and companies %}
+        <form method="get" class="d-inline-block">
+            <select name="company" class="form-select form-select-sm" onchange="this.form.submit()">
+                <option value="">All Companies</option>
+                {% for c in companies %}
+                    <option value="{{ c.id }}" {% if company and company.id == c.id %}selected{% endif %}>{{ c.name }} ({{ c.code }})</option>
+                {% endfor %}
+            </select>
+        </form>
+        {% endif %}
+        <a href="{% url 'attendance:list' %}" class="btn btn-outline-secondary btn-sm">
+            <i class="bi bi-calendar-check me-1"></i> Attendance Log
+        </a>
+    </div>
+</div>
+
+<!-- Ledger Metrics Overview -->
+<div class="row g-3 mb-4">
+    <div class="col-sm-6 col-lg-3">
+        <div class="card card-stat p-3 border-start border-primary border-4 h-100">
+            <div class="d-flex justify-content-between align-items-center">
+                <div>
+                    <div class="text-muted small fw-semibold">Total Blocks Minted</div>
+                    <h3 class="fw-bold text-dark mt-1 mb-0">{{ total_blocks }}</h3>
+                    <span class="text-primary small font-monospace"><i class="bi bi-link me-1"></i>Chained Blocks</span>
+                </div>
+                <div class="stat-icon primary">
+                    <i class="bi bi-boxes"></i>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="col-sm-6 col-lg-3">
+        <div class="card card-stat p-3 border-start border-success border-4 h-100">
+            <div class="d-flex justify-content-between align-items-center">
+                <div>
+                    <div class="text-muted small fw-semibold">Cryptographic Integrity</div>
+                    <h3 class="fw-bold text-success mt-1 mb-0">100%</h3>
+                    <span class="text-success small fw-semibold"><i class="bi bi-check-circle-fill me-1"></i>Verified Tamper-Proof</span>
+                </div>
+                <div class="stat-icon success">
+                    <i class="bi bi-patch-check-fill"></i>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="col-sm-6 col-lg-3">
+        <div class="card card-stat p-3 border-start border-danger border-4 h-100">
+            <div class="d-flex justify-content-between align-items-center">
+                <div>
+                    <div class="text-muted small fw-semibold">Deletions Tracked</div>
+                    <h3 class="fw-bold text-danger mt-1 mb-0">{{ deleted_blocks_count }}</h3>
+                    <span class="text-danger small fw-semibold"><i class="bi bi-trash-fill me-1"></i>Zero Silent Deletes</span>
+                </div>
+                <div class="stat-icon danger">
+                    <i class="bi bi-trash3"></i>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="col-sm-6 col-lg-3">
+        <div class="card card-stat p-3 border-start border-warning border-4 h-100">
+            <div class="d-flex justify-content-between align-items-center">
+                <div>
+                    <div class="text-muted small fw-semibold">Edits & Regularizations</div>
+                    <h3 class="fw-bold text-dark mt-1 mb-0">{{ adjustments_count|add:regularizations_count }}</h3>
+                    <span class="text-warning small fw-semibold"><i class="bi bi-pencil-fill me-1"></i>Documented Justifications</span>
+                </div>
+                <div class="stat-icon warning">
+                    <i class="bi bi-arrow-left-right"></i>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Search & Filters -->
+<div class="card card-stat p-3 mb-4">
+    <form method="get" class="row g-2 align-items-center">
+        {% if company %}
+            <input type="hidden" name="company" value="{{ company.id }}">
+        {% endif %}
+
+        <div class="col-lg-4 col-md-6">
+            <div class="input-group">
+                <span class="input-group-text bg-white"><i class="bi bi-search text-muted"></i></span>
+                <input type="text" name="q" value="{{ q }}" class="form-control" placeholder="Search by employee, ID, reason, or block hash...">
+            </div>
+        </div>
+
+        <div class="col-lg-3 col-md-6">
+            <select name="action" class="form-select">
+                <option value="">All Actions</option>
+                {% for act in distinct_actions %}
+                    {% if act %}
+                    <option value="{{ act }}" {% if action_filter == act %}selected{% endif %}>{{ act }}</option>
+                    {% endif %}
+                {% endfor %}
+            </select>
+        </div>
+
+        <div class="col-lg-2 col-md-3">
+            <input type="date" name="date_from" value="{{ date_from }}" class="form-control" placeholder="From Date">
+        </div>
+
+        <div class="col-lg-2 col-md-3">
+            <input type="date" name="date_to" value="{{ date_to }}" class="form-control" placeholder="To Date">
+        </div>
+
+        <div class="col-lg-1 col-md-2 d-flex gap-1">
+            <button type="submit" class="btn btn-primary w-100" title="Apply Filter">
+                <i class="bi bi-filter"></i>
+            </button>
+            {% if q or action_filter or date_from or date_to %}
+            <a href="{% url 'attendance:audit_ledger' %}" class="btn btn-outline-secondary" title="Clear Filters">
+                <i class="bi bi-x-lg"></i>
+            </a>
+            {% endif %}
+        </div>
+    </form>
+</div>
+
+<!-- Blockchain Ledger Table -->
+<div class="card card-stat p-0 mb-4 overflow-hidden">
+    <div class="table-responsive">
+        <table class="table table-hover align-middle mb-0">
+            <thead class="table-light text-muted small text-uppercase">
+                <tr>
+                    <th class="ps-4" style="width: 130px;">Block #</th>
+                    <th style="min-width: 200px;">Target Employee</th>
+                    <th style="min-width: 170px;">Action</th>
+                    <th style="min-width: 160px;">Operator / Actor</th>
+                    <th style="min-width: 240px;">Business Reason / Justification</th>
+                    <th style="min-width: 140px;">Timestamp</th>
+                    <th class="text-end pe-4" style="width: 100px;">Snapshot</th>
+                </tr>
+            </thead>
+            <tbody class="small">
+                {% for log in page_obj %}
+                <tr>
+                    <!-- Block Index & Hash -->
+                    <td class="ps-4">
+                        <div class="d-flex align-items-center gap-1">
+                            <span class="badge bg-dark font-monospace">#{{ log.block_index }}</span>
+                        </div>
+                        <div class="mt-1" title="Block Hash: {{ log.block_hash }}">
+                            <code class="text-muted" style="font-size: 0.68rem;">{{ log.block_hash|slice:":10" }}...{{ log.block_hash|slice:"-6:" }}</code>
+                        </div>
+                    </td>
+
+                    <!-- Target Employee -->
+                    <td>
+                        <div class="fw-semibold text-dark">{{ log.employee_name|default:"General System" }}</div>
+                        <div class="text-muted" style="font-size: 0.75rem;">
+                            <span class="font-monospace text-secondary">{{ log.employee_id_code|default:"-" }}</span>
+                            {% if log.attendance_date %}
+                                &bull; Date: <strong>{{ log.attendance_date|date:"d M Y" }}</strong>
+                            {% endif %}
+                        </div>
+                    </td>
+
+                    <!-- Action Badge -->
+                    <td>
+                        {% if 'Deleted' in log.action %}
+                            <span class="badge bg-danger-subtle text-danger border border-danger-subtle fw-bold">
+                                <i class="bi bi-trash-fill me-1"></i> {{ log.action }}
+                            </span>
+                        {% elif 'Created' in log.action %}
+                            <span class="badge bg-success-subtle text-success border border-success-subtle fw-bold">
+                                <i class="bi bi-plus-circle-fill me-1"></i> {{ log.action }}
+                            </span>
+                        {% elif 'Adjusted' in log.action or 'Edit' in log.action %}
+                            <span class="badge bg-warning-subtle text-warning border border-warning-subtle text-dark fw-bold">
+                                <i class="bi bi-pencil-fill me-1"></i> {{ log.action }}
+                            </span>
+                        {% elif 'Approved' in log.action %}
+                            <span class="badge bg-primary-subtle text-primary border border-primary-subtle fw-bold">
+                                <i class="bi bi-check-circle-fill me-1"></i> {{ log.action }}
+                            </span>
+                        {% else %}
+                            <span class="badge bg-light text-dark border">
+                                {{ log.action }}
+                            </span>
+                        {% endif %}
+                        {% if log.field_name and log.field_name != 'all' %}
+                            <div class="text-muted" style="font-size: 0.7rem;">Field: {{ log.field_name }}</div>
+                        {% endif %}
+                    </td>
+
+                    <!-- Operator / Actor -->
+                    <td>
+                        <div class="fw-semibold text-dark">{{ log.changed_by.get_display_name|default:"System Engine" }}</div>
+                        <div class="text-muted" style="font-size: 0.72rem;">
+                            {{ log.changed_by.get_role_display|default:"Automated" }}
+                            {% if log.ip_address %}&bull; <span class="font-monospace">{{ log.ip_address }}</span>{% endif %}
+                        </div>
+                    </td>
+
+                    <!-- Business Reason -->
+                    <td>
+                        <div class="p-2 rounded bg-light border text-dark" style="max-width: 320px; font-size: 0.78rem;">
+                            {{ log.reason|default:"No reason stated." }}
+                        </div>
+                        {% if log.new_value and log.new_value != 'DELETED_FROM_ACTIVE_ROSTER' %}
+                        <div class="text-muted mt-1 font-monospace" style="font-size: 0.68rem; max-width: 320px;">
+                            {{ log.new_value }}
+                        </div>
+                        {% endif %}
+                    </td>
+
+                    <!-- Timestamp -->
+                    <td>
+                        <div class="fw-semibold text-dark">{{ log.created_at|date:"d M Y" }}</div>
+                        <div class="text-muted font-monospace" style="font-size: 0.72rem;">{{ log.created_at|date:"h:i:s A" }}</div>
+                    </td>
+
+                    <!-- Snapshot Detail Trigger -->
+                    <td class="text-end pe-4">
+                        {% if log.snapshot %}
+                        <button type="button" 
+                                class="btn btn-outline-info btn-sm btn-snapshot-view" 
+                                data-block-index="{{ log.block_index }}"
+                                data-employee="{{ log.employee_name|default:'General System' }}"
+                                data-hash="{{ log.block_hash }}"
+                                data-prev-hash="{{ log.previous_hash }}"
+                                data-action="{{ log.action }}"
+                                data-operator="{{ log.changed_by.get_display_name|default:'System Engine' }}"
+                                data-reason="{{ log.reason|default:'No reason stated.' }}"
+                                data-target-id="snapshotData{{ log.id }}"
+                                title="View Full Cryptographic Snapshot">
+                            <i class="bi bi-braces"></i> Snapshot
+                        </button>
+                        <script type="application/json" id="snapshotData{{ log.id }}">{{ log.snapshot_json|safe }}</script>
+                        {% else %}
+                        <span class="text-muted small">&mdash;</span>
+                        {% endif %}
+                    </td>
+                </tr>
+                {% empty %}
+                <tr>
+                    <td colspan="7" class="text-center py-5 text-muted">
+                        <i class="bi bi-boxes fs-1 d-block mb-2 text-muted"></i>
+                        <h6>No Audit Ledger Blocks Found</h6>
+                        <p class="small mb-0">No actions or modifications match your filter selection.</p>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+
+<!-- Pagination -->
+{% if page_obj.has_other_pages %}
+<nav class="d-flex justify-content-center">
+    <ul class="pagination pagination-sm">
+        {% if page_obj.has_previous %}
+            <li class="page-item"><a class="page-link" href="?page={{ page_obj.previous_page_number }}{% if q %}&q={{ q }}{% endif %}{% if action_filter %}&action={{ action_filter }}{% endif %}">&laquo;</a></li>
+        {% endif %}
+        {% for num in page_obj.paginator.page_range %}
+            <li class="page-item {% if page_obj.number == num %}active{% endif %}">
+                <a class="page-link" href="?page={{ num }}{% if q %}&q={{ q }}{% endif %}{% if action_filter %}&action={{ action_filter }}{% endif %}">{{ num }}</a>
+            </li>
+        {% endfor %}
+        {% if page_obj.has_next %}
+            <li class="page-item"><a class="page-link" href="?page={{ page_obj.next_page_number }}{% if q %}&q={{ q }}{% endif %}{% if action_filter %}&action={{ action_filter }}{% endif %}">&raquo;</a></li>
+        {% endif %}
+    </ul>
+</nav>
+{% endif %}
+
+<!-- Single Dedicated Cryptographic Snapshot Modal (Placed outside table to eliminate UI shifting/flicker) -->
+<div class="modal fade" id="ledgerSnapshotModal" tabindex="-1" aria-labelledby="ledgerSnapshotModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered modal-lg">
+        <div class="modal-content border-0 shadow-lg">
+            <div class="modal-header bg-dark text-white border-bottom border-secondary py-3 px-4">
+                <div class="d-flex align-items-center gap-2">
+                    <span class="badge bg-info text-dark font-monospace fw-bold" id="snapModalBlockBadge">#0</span>
+                    <h6 class="modal-title fw-bold mb-0" id="ledgerSnapshotModalLabel">
+                        <i class="bi bi-shield-check text-info me-2"></i> Block State Snapshot &bull; <span id="snapModalEmployee" class="text-info">Employee</span>
+                    </h6>
+                </div>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body p-4 bg-light">
+                <!-- Metadata Summary -->
+                <div class="p-3 bg-white rounded-3 border shadow-xs mb-3 small">
+                    <div class="row g-2">
+                        <div class="col-12 col-md-6">
+                            <span class="text-muted fw-semibold">Block Hash:</span>
+                            <div class="mt-1">
+                                <code class="text-break font-monospace small bg-light p-1 rounded d-block" id="snapModalHash">-</code>
+                            </div>
+                        </div>
+                        <div class="col-12 col-md-6">
+                            <span class="text-muted fw-semibold">Previous Hash:</span>
+                            <div class="mt-1">
+                                <code class="text-break font-monospace small bg-light p-1 rounded d-block" id="snapModalPrevHash">-</code>
+                            </div>
+                        </div>
+                        <div class="col-sm-6">
+                            <span class="text-muted fw-semibold">Action:</span>
+                            <div class="fw-bold text-dark mt-1" id="snapModalAction">-</div>
+                        </div>
+                        <div class="col-sm-6">
+                            <span class="text-muted fw-semibold">Authorized Operator:</span>
+                            <div class="fw-semibold text-dark mt-1" id="snapModalOperator">-</div>
+                        </div>
+                        <div class="col-12">
+                            <span class="text-muted fw-semibold">Operator Justification:</span>
+                            <div class="p-2 rounded bg-light border text-dark mt-1" id="snapModalReason">-</div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Formatted JSON Snapshot -->
+                <div class="d-flex justify-content-between align-items-center mb-2">
+                    <h6 class="fw-bold text-dark small mb-0">
+                        <i class="bi bi-database me-1 text-primary"></i> Serialized Attendance State:
+                    </h6>
+                    <button type="button" class="btn btn-outline-secondary btn-sm py-1 px-2" id="snapCopyBtn" style="font-size: 0.75rem;">
+                        <i class="bi bi-clipboard me-1"></i> Copy State JSON
+                    </button>
+                </div>
+                <div class="bg-dark text-light p-3 rounded-3 font-monospace small shadow-sm" style="max-height: 320px; overflow-y: auto;">
+                    <pre class="mb-0 text-info" id="snapModalCode" style="font-size: 0.82rem; font-family: var(--font-mono); white-space: pre-wrap; word-break: break-word;"></pre>
+                </div>
+            </div>
+            <div class="modal-footer bg-white border-top py-2 px-4 d-flex justify-content-between">
+                <span class="text-muted small" style="font-size: 0.75rem;">
+                    <i class="bi bi-patch-check-fill text-success me-1"></i> Cryptographically Chained SHA-256 Ledger
+                </span>
+                <button type="button" class="btn btn-secondary btn-sm px-3" data-bs-dismiss="modal">Close</button>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+document.addEventListener('DOMContentLoaded', function () {
+    const modalEl = document.getElementById('ledgerSnapshotModal');
+    if (!modalEl) return;
+
+    const bsModal = new bootstrap.Modal(modalEl, {
+        backdrop: true,
+        keyboard: true,
+        focus: false // Prevents aggressive auto-scroll jumps in container-scrolled layout
+    });
+
+    const badgeEl = document.getElementById('snapModalBlockBadge');
+    const employeeEl = document.getElementById('snapModalEmployee');
+    const hashEl = document.getElementById('snapModalHash');
+    const prevHashEl = document.getElementById('snapModalPrevHash');
+    const actionEl = document.getElementById('snapModalAction');
+    const operatorEl = document.getElementById('snapModalOperator');
+    const reasonEl = document.getElementById('snapModalReason');
+    const codeEl = document.getElementById('snapModalCode');
+    const copyBtn = document.getElementById('snapCopyBtn');
+
+    document.querySelectorAll('.btn-snapshot-view').forEach(function (btn) {
+        btn.addEventListener('click', function (e) {
+            e.preventDefault();
+            e.stopPropagation();
+
+            badgeEl.textContent = '#' + (btn.getAttribute('data-block-index') || '0');
+            employeeEl.textContent = btn.getAttribute('data-employee') || 'General System';
+            hashEl.textContent = btn.getAttribute('data-hash') || '-';
+            prevHashEl.textContent = btn.getAttribute('data-prev-hash') || '-';
+            actionEl.textContent = btn.getAttribute('data-action') || '-';
+            operatorEl.textContent = btn.getAttribute('data-operator') || 'System Engine';
+            reasonEl.textContent = btn.getAttribute('data-reason') || 'No reason stated.';
+
+            const targetScriptId = btn.getAttribute('data-target-id');
+            const scriptEl = document.getElementById(targetScriptId);
+            if (scriptEl) {
+                codeEl.textContent = scriptEl.textContent.trim();
+            } else {
+                codeEl.textContent = '{}';
+            }
+
+            bsModal.show();
+        });
+    });
+
+    if (copyBtn) {
+        copyBtn.addEventListener('click', function () {
+            if (codeEl) {
+                navigator.clipboard.writeText(codeEl.textContent).then(function () {
+                    const originalText = copyBtn.innerHTML;
+                    copyBtn.innerHTML = '<i class="bi bi-check2 text-success me-1"></i> Copied!';
+                    setTimeout(function () {
+                        copyBtn.innerHTML = originalText;
+                    }, 2000);
+                });
+            }
+        });
+    }
+});
+</script>
+{% endblock %}

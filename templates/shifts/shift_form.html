@@ -1,0 +1,569 @@
+{% extends 'base.html' %}
+
+{% block title %}{{ title }} &mdash; Smart HRMS{% endblock %}
+{% block page_title %}{{ title }}{% endblock %}
+
+{% block content %}
+<div class="row justify-content-center">
+    <div class="col-lg-8">
+        <div class="card card-stat p-4">
+            <div class="d-flex align-items-center gap-3 mb-4 border-bottom pb-3">
+                <div class="stat-icon primary">
+                    <i class="bi bi-clock-history"></i>
+                </div>
+                <div>
+                    <h5 class="fw-bold mb-0 text-dark">{{ title }}</h5>
+                    <p class="text-muted small mb-0">Define working schedules, overnight shifts, lunch/tea breaks, and grace period limits</p>
+                </div>
+            </div>
+
+            <form method="post">
+                {% csrf_token %}
+
+                <!-- Section 1: Basic Identifiers -->
+                <div class="mb-4">
+                    <h6 class="fw-bold text-primary mb-3">
+                        <i class="bi bi-tag me-1"></i> 1. Shift Identity & Affiliation
+                    </h6>
+                    <div class="row g-3">
+                        <div class="col-md-6">
+                            <label for="{{ form.company.id_for_label }}" class="form-label fw-semibold small">Company <span class="text-danger">*</span></label>
+                            {{ form.company }}
+                            {% if form.company.errors %}<div class="text-danger small mt-1">{{ form.company.errors.0 }}</div>{% endif %}
+                        </div>
+                        <div class="col-md-6">
+                            <label for="{{ form.shift_code.id_for_label }}" class="form-label fw-semibold small">Shift Code</label>
+                            {{ form.shift_code }}
+                            <div class="form-text small">e.g. GEN-0917, NGT-2206</div>
+                            {% if form.shift_code.errors %}<div class="text-danger small mt-1">{{ form.shift_code.errors.0 }}</div>{% endif %}
+                        </div>
+                        <div class="col-12">
+                            <label for="{{ form.name.id_for_label }}" class="form-label fw-semibold small">Shift Name <span class="text-danger">*</span></label>
+                            {{ form.name }}
+                            {% if form.name.errors %}<div class="text-danger small mt-1">{{ form.name.errors.0 }}</div>{% endif %}
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Section 2: Shift Timings & Overnight Check -->
+                <div class="mb-4 border-top pt-4">
+                    <div class="d-flex justify-content-between align-items-center mb-3">
+                        <h6 class="fw-bold text-primary mb-0">
+                            <i class="bi bi-clock-history me-1"></i> 2. Timings & Overnight Settings
+                        </h6>
+                        <span class="badge bg-primary-subtle text-primary border border-primary-subtle small">
+                            <i class="bi bi-clock me-1"></i> Clock Selection Mode
+                        </span>
+                    </div>
+
+                    <div class="row g-3">
+                        <!-- Start Time with Clock Picker -->
+                        <div class="col-md-6">
+                            <label for="{{ form.start_time.id_for_label }}" class="form-label fw-semibold small">
+                                <i class="bi bi-sun me-1 text-warning"></i> Start Time <span class="text-danger">*</span>
+                            </label>
+                            <div class="input-group">
+                                {{ form.start_time }}
+                                <button type="button" class="btn btn-outline-primary btn-open-clock" data-target="id_start_time" data-title="Shift Start Time" title="Choose time from Clock">
+                                    <i class="bi bi-clock-fill me-1"></i> Clock
+                                </button>
+                            </div>
+                            <!-- Quick Clock Preset Chips -->
+                            <div class="mt-2 d-flex flex-wrap gap-1 align-items-center">
+                                <span class="text-muted small me-1" style="font-size: 0.72rem;">Quick Clock:</span>
+                                <button type="button" class="btn btn-xs btn-outline-secondary py-0 px-2 clock-preset-btn" data-target="id_start_time" data-val="08:00">08:00 AM</button>
+                                <button type="button" class="btn btn-xs btn-outline-secondary py-0 px-2 clock-preset-btn" data-target="id_start_time" data-val="08:30">08:30 AM</button>
+                                <button type="button" class="btn btn-xs btn-outline-primary py-0 px-2 clock-preset-btn active" data-target="id_start_time" data-val="09:00">09:00 AM</button>
+                                <button type="button" class="btn btn-xs btn-outline-secondary py-0 px-2 clock-preset-btn" data-target="id_start_time" data-val="09:30">09:30 AM</button>
+                                <button type="button" class="btn btn-xs btn-outline-secondary py-0 px-2 clock-preset-btn" data-target="id_start_time" data-val="10:00">10:00 AM</button>
+                                <button type="button" class="btn btn-xs btn-outline-secondary py-0 px-2 clock-preset-btn" data-target="id_start_time" data-val="14:00">02:00 PM</button>
+                            </div>
+                            {% if form.start_time.errors %}<div class="text-danger small mt-1">{{ form.start_time.errors.0 }}</div>{% endif %}
+                        </div>
+
+                        <!-- End Time with Clock Picker -->
+                        <div class="col-md-6">
+                            <label for="{{ form.end_time.id_for_label }}" class="form-label fw-semibold small">
+                                <i class="bi bi-moon me-1 text-primary"></i> End Time <span class="text-danger">*</span>
+                            </label>
+                            <div class="input-group">
+                                {{ form.end_time }}
+                                <button type="button" class="btn btn-outline-primary btn-open-clock" data-target="id_end_time" data-title="Shift End Time" title="Choose time from Clock">
+                                    <i class="bi bi-clock-fill me-1"></i> Clock
+                                </button>
+                            </div>
+                            <!-- Quick Clock Preset Chips -->
+                            <div class="mt-2 d-flex flex-wrap gap-1 align-items-center">
+                                <span class="text-muted small me-1" style="font-size: 0.72rem;">Quick Clock:</span>
+                                <button type="button" class="btn btn-xs btn-outline-secondary py-0 px-2 clock-preset-btn" data-target="id_end_time" data-val="17:00">05:00 PM</button>
+                                <button type="button" class="btn btn-xs btn-outline-secondary py-0 px-2 clock-preset-btn" data-target="id_end_time" data-val="17:30">05:30 PM</button>
+                                <button type="button" class="btn btn-xs btn-outline-primary py-0 px-2 clock-preset-btn active" data-target="id_end_time" data-val="18:00">06:00 PM</button>
+                                <button type="button" class="btn btn-xs btn-outline-secondary py-0 px-2 clock-preset-btn" data-target="id_end_time" data-val="18:30">06:30 PM</button>
+                                <button type="button" class="btn btn-xs btn-outline-secondary py-0 px-2 clock-preset-btn" data-target="id_end_time" data-val="19:00">07:00 PM</button>
+                                <button type="button" class="btn btn-xs btn-outline-secondary py-0 px-2 clock-preset-btn" data-target="id_end_time" data-val="22:00">10:00 PM</button>
+                            </div>
+                            {% if form.end_time.errors %}<div class="text-danger small mt-1">{{ form.end_time.errors.0 }}</div>{% endif %}
+                        </div>
+
+                        <!-- Expected Hours with Real-Time Auto-Calculation & On-the-spot Modification -->
+                        <div class="col-md-6">
+                            <label for="{{ form.total_expected_hours.id_for_label }}" class="form-label fw-semibold small">
+                                <i class="bi bi-hourglass-split me-1 text-primary"></i> Gross Expected Hours
+                            </label>
+                            <div class="input-group">
+                                {{ form.total_expected_hours }}
+                                <span class="input-group-text small bg-light">hrs / shift</span>
+                            </div>
+                            <div class="form-text small mt-1" id="shiftHoursFeedback">
+                                <span class="text-success fw-semibold" id="hoursFeedbackBadge">
+                                    <i class="bi bi-magic me-1"></i>Auto-calculated based on shift timings
+                                </span>
+                                &bull; <span class="text-muted"><i class="bi bi-pencil-square me-1"></i>Can be modified on the spot</span>
+                            </div>
+                            {% if form.total_expected_hours.errors %}<div class="text-danger small mt-1">{{ form.total_expected_hours.errors.0 }}</div>{% endif %}
+                        </div>
+
+                        <!-- Overnight Shift Indicator -->
+                        <div class="col-md-6 d-flex align-items-center">
+                            <div class="form-check mt-3 p-2 bg-light rounded-3 border w-100 ps-4">
+                                {{ form.is_overnight }}
+                                <label class="form-check-label fw-bold small text-dark ms-1" for="{{ form.is_overnight.id_for_label }}">
+                                    <i class="bi bi-moon-stars text-warning me-1"></i> Overnight Shift (Crosses Midnight)
+                                </label>
+                                <div class="form-text small ps-1" id="overnightHelpText">
+                                    Automatically flagged if End Time is earlier than Start Time.
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Section 3: Breaks, Grace Period & Overtime -->
+                <div class="mb-4 border-top pt-4">
+                    <h6 class="fw-bold text-primary mb-3">
+                        <i class="bi bi-cup-hot me-1"></i> 3. Breaks, Grace Period & Policy
+                    </h6>
+                    <div class="row g-3">
+                        <div class="col-md-4">
+                            <label for="{{ form.lunch_duration_minutes.id_for_label }}" class="form-label fw-semibold small">Lunch Break (Mins)</label>
+                            {{ form.lunch_duration_minutes }}
+                        </div>
+                        <div class="col-md-4">
+                            <label for="{{ form.break_duration_minutes.id_for_label }}" class="form-label fw-semibold small">Tea/Personal Break (Mins)</label>
+                            {{ form.break_duration_minutes }}
+                        </div>
+                        <div class="col-md-4">
+                            <label for="{{ form.grace_period_minutes.id_for_label }}" class="form-label fw-semibold small">Late Grace Window (Mins)</label>
+                            {{ form.grace_period_minutes }}
+                            <div class="form-text small">Allowed late arrival window</div>
+                        </div>
+
+                        <div class="col-md-6">
+                            <div class="form-check mt-2">
+                                {{ form.overtime_eligibility }}
+                                <label class="form-check-label small fw-semibold" for="{{ form.overtime_eligibility.id_for_label }}">
+                                    Eligible for Overtime Compensation
+                                </label>
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="form-check mt-2">
+                                {{ form.is_active }}
+                                <label class="form-check-label small fw-semibold" for="{{ form.is_active.id_for_label }}">
+                                    Shift Is Active
+                                </label>
+                            </div>
+                        </div>
+
+                        <div class="col-12 mt-3">
+                            <label for="{{ form.description.id_for_label }}" class="form-label fw-semibold small">Description</label>
+                            {{ form.description }}
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Actions -->
+                <div class="pt-3 border-top d-flex flex-wrap gap-2">
+                    <button type="submit" class="btn btn-primary px-4">
+                        <i class="bi bi-check2-circle me-1"></i> Save Shift Configuration
+                    </button>
+                    <a href="{% if is_edit %}{% url 'shifts:detail' shift.pk %}{% else %}{% url 'shifts:list' %}{% endif %}" class="btn btn-light px-4">
+                        Cancel
+                    </a>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<!-- Interactive Visual Clock Selection Modal -->
+<div class="modal fade" id="clockPickerModal" tabindex="-1" aria-labelledby="clockPickerTitle" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered" style="max-width: 360px;">
+        <div class="modal-content shadow-lg border-0 rounded-4 overflow-hidden">
+            <div class="modal-header bg-primary text-white py-2 px-3">
+                <h6 class="modal-title fw-bold" id="clockPickerTitle">
+                    <i class="bi bi-clock me-1"></i> Select Shift Time (Clock)
+                </h6>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body p-3 text-center">
+                <!-- Large Digital Display with AM/PM -->
+                <div class="bg-light p-2 rounded-3 mb-3 d-flex justify-content-center align-items-center gap-2 border shadow-sm">
+                    <button type="button" class="btn btn-sm btn-link text-decoration-none p-0 fs-2 fw-bold text-dark font-monospace" id="digitalHourDisplay" title="Click to pick hour">09</button>
+                    <span class="fs-2 fw-bold text-muted font-monospace">:</span>
+                    <button type="button" class="btn btn-sm btn-link text-decoration-none p-0 fs-2 fw-bold text-dark font-monospace" id="digitalMinuteDisplay" title="Click to pick minute">00</button>
+                    <div class="btn-group btn-group-sm ms-2" role="group">
+                        <button type="button" class="btn btn-primary active px-2 fw-bold" id="clockAmBtn">AM</button>
+                        <button type="button" class="btn btn-outline-secondary px-2 fw-bold" id="clockPmBtn">PM</button>
+                    </div>
+                </div>
+
+                <!-- Clock Mode Tabs (Hour / Minute) -->
+                <div class="btn-group btn-group-sm w-100 mb-3" role="group">
+                    <button type="button" class="btn btn-primary active fw-semibold" id="tabHourMode">
+                        <i class="bi bi-123 me-1"></i> Hour (1 - 12)
+                    </button>
+                    <button type="button" class="btn btn-outline-primary fw-semibold" id="tabMinuteMode">
+                        <i class="bi bi-stopwatch me-1"></i> Minute (00 - 55)
+                    </button>
+                </div>
+
+                <!-- Circular Clock Dial -->
+                <div class="clock-dial-wrapper mx-auto mb-3">
+                    <div class="clock-dial" id="clockDial">
+                        <div class="clock-pin"></div>
+                        <div class="clock-pointer" id="clockPointer"></div>
+                        <div id="clockNumbers"></div>
+                    </div>
+                </div>
+
+                <!-- Quick Minute Selection Pills -->
+                <div class="d-flex justify-content-center gap-1">
+                    <button type="button" class="btn btn-xs btn-light border py-1 px-2 clock-quick-min" data-min="00">:00</button>
+                    <button type="button" class="btn btn-xs btn-light border py-1 px-2 clock-quick-min" data-min="15">:15</button>
+                    <button type="button" class="btn btn-xs btn-light border py-1 px-2 clock-quick-min" data-min="30">:30</button>
+                    <button type="button" class="btn btn-xs btn-light border py-1 px-2 clock-quick-min" data-min="45">:45</button>
+                </div>
+            </div>
+            <div class="modal-footer py-2 px-3 bg-light border-top d-flex justify-content-between">
+                <button type="button" class="btn btn-sm btn-light border" data-bs-dismiss="modal">Cancel</button>
+                <button type="button" class="btn btn-sm btn-primary px-3 shadow-sm fw-semibold" id="btnConfirmClock">
+                    <i class="bi bi-check2 me-1"></i> Apply Selected Time
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function () {
+    const startInput = document.getElementById('id_start_time');
+    const endInput = document.getElementById('id_end_time');
+    const hoursInput = document.getElementById('id_total_expected_hours');
+    const overnightCheck = document.getElementById('is_overnight');
+    const feedbackBadge = document.getElementById('hoursFeedbackBadge');
+
+    let currentTargetInput = null;
+    let selectedHour = 9;
+    let selectedMinute = 0;
+    let selectedPeriod = 'AM';
+    let clockMode = 'hour'; // 'hour' or 'minute'
+
+    const clockModalEl = document.getElementById('clockPickerModal');
+    let clockModal = null;
+    if (clockModalEl && window.bootstrap && window.bootstrap.Modal) {
+        clockModal = new bootstrap.Modal(clockModalEl);
+    }
+
+    const digitalHourDisplay = document.getElementById('digitalHourDisplay');
+    const digitalMinuteDisplay = document.getElementById('digitalMinuteDisplay');
+    const clockAmBtn = document.getElementById('clockAmBtn');
+    const clockPmBtn = document.getElementById('clockPmBtn');
+    const tabHourMode = document.getElementById('tabHourMode');
+    const tabMinuteMode = document.getElementById('tabMinuteMode');
+    const clockTitle = document.getElementById('clockPickerTitle');
+    const clockNumbersContainer = document.getElementById('clockNumbers');
+    const clockPointer = document.getElementById('clockPointer');
+    const btnConfirmClock = document.getElementById('btnConfirmClock');
+
+    // 1. Open Clock Picker
+    document.querySelectorAll('.btn-open-clock').forEach(btn => {
+        btn.addEventListener('click', function () {
+            const targetId = this.getAttribute('data-target');
+            const targetTitle = this.getAttribute('data-title') || 'Select Shift Time';
+            currentTargetInput = document.getElementById(targetId);
+            if (!currentTargetInput) return;
+
+            clockTitle.innerHTML = `<i class="bi bi-clock me-1"></i> ${targetTitle}`;
+
+            // Parse existing value if any (e.g. "09:00:00" or "18:00")
+            const val = currentTargetInput.value;
+            if (val) {
+                const parts = val.split(':');
+                let h = parseInt(parts[0], 10);
+                selectedMinute = parseInt(parts[1], 10) || 0;
+                if (h >= 12) {
+                    selectedPeriod = 'PM';
+                    selectedHour = (h === 12) ? 12 : h - 12;
+                } else {
+                    selectedPeriod = 'AM';
+                    selectedHour = (h === 0) ? 12 : h;
+                }
+            } else {
+                if (targetId.includes('end')) {
+                    selectedHour = 6;
+                    selectedMinute = 0;
+                    selectedPeriod = 'PM';
+                } else {
+                    selectedHour = 9;
+                    selectedMinute = 0;
+                    selectedPeriod = 'AM';
+                }
+            }
+
+            clockMode = 'hour';
+            updateModeButtons();
+            updateClockDisplay();
+            renderClockNumbers();
+
+            if (clockModal) clockModal.show();
+        });
+    });
+
+    // 2. Mode Tabs
+    if (tabHourMode && tabMinuteMode) {
+        tabHourMode.addEventListener('click', () => {
+            clockMode = 'hour';
+            updateModeButtons();
+            renderClockNumbers();
+        });
+        tabMinuteMode.addEventListener('click', () => {
+            clockMode = 'minute';
+            updateModeButtons();
+            renderClockNumbers();
+        });
+    }
+
+    if (digitalHourDisplay) {
+        digitalHourDisplay.addEventListener('click', () => {
+            clockMode = 'hour';
+            updateModeButtons();
+            renderClockNumbers();
+        });
+    }
+
+    if (digitalMinuteDisplay) {
+        digitalMinuteDisplay.addEventListener('click', () => {
+            clockMode = 'minute';
+            updateModeButtons();
+            renderClockNumbers();
+        });
+    }
+
+    function updateModeButtons() {
+        if (clockMode === 'hour') {
+            tabHourMode.className = 'btn btn-primary active fw-semibold';
+            tabMinuteMode.className = 'btn btn-outline-primary fw-semibold';
+            digitalHourDisplay.className = 'btn btn-sm btn-link text-decoration-none p-0 fs-2 fw-bold text-primary font-monospace';
+            digitalMinuteDisplay.className = 'btn btn-sm btn-link text-decoration-none p-0 fs-2 fw-bold text-dark font-monospace';
+        } else {
+            tabHourMode.className = 'btn btn-outline-primary fw-semibold';
+            tabMinuteMode.className = 'btn btn-primary active fw-semibold';
+            digitalHourDisplay.className = 'btn btn-sm btn-link text-decoration-none p-0 fs-2 fw-bold text-dark font-monospace';
+            digitalMinuteDisplay.className = 'btn btn-sm btn-link text-decoration-none p-0 fs-2 fw-bold text-primary font-monospace';
+        }
+    }
+
+    // 3. AM / PM Toggles
+    if (clockAmBtn && clockPmBtn) {
+        clockAmBtn.addEventListener('click', () => {
+            selectedPeriod = 'AM';
+            clockAmBtn.className = 'btn btn-primary active px-2 fw-bold';
+            clockPmBtn.className = 'btn btn-outline-secondary px-2 fw-bold';
+        });
+        clockPmBtn.addEventListener('click', () => {
+            selectedPeriod = 'PM';
+            clockPmBtn.className = 'btn btn-primary active px-2 fw-bold';
+            clockAmBtn.className = 'btn btn-outline-secondary px-2 fw-bold';
+        });
+    }
+
+    function updateClockDisplay() {
+        if (digitalHourDisplay) {
+            digitalHourDisplay.textContent = (selectedHour < 10) ? `0${selectedHour}` : `${selectedHour}`;
+        }
+        if (digitalMinuteDisplay) {
+            digitalMinuteDisplay.textContent = (selectedMinute < 10) ? `0${selectedMinute}` : `${selectedMinute}`;
+        }
+        if (selectedPeriod === 'PM') {
+            clockPmBtn.className = 'btn btn-primary active px-2 fw-bold';
+            clockAmBtn.className = 'btn btn-outline-secondary px-2 fw-bold';
+        } else {
+            clockAmBtn.className = 'btn btn-primary active px-2 fw-bold';
+            clockPmBtn.className = 'btn btn-outline-secondary px-2 fw-bold';
+        }
+    }
+
+    // 4. Render Clock Dial Numbers
+    function renderClockNumbers() {
+        if (!clockNumbersContainer) return;
+        clockNumbersContainer.innerHTML = '';
+        const radius = 78;
+        const centerX = 105;
+        const centerY = 105;
+
+        if (clockMode === 'hour') {
+            for (let h = 1; h <= 12; h++) {
+                const angle = (h * 30 - 90) * (Math.PI / 180);
+                const x = Math.round(centerX + radius * Math.cos(angle) - 16);
+                const y = Math.round(centerY + radius * Math.sin(angle) - 16);
+                const numEl = document.createElement('div');
+                numEl.className = `clock-number-item ${selectedHour === h ? 'active' : ''}`;
+                numEl.style.left = `${x}px`;
+                numEl.style.top = `${y}px`;
+                numEl.textContent = h;
+                numEl.addEventListener('click', () => {
+                    selectedHour = h;
+                    updateClockDisplay();
+                    clockMode = 'minute';
+                    updateModeButtons();
+                    renderClockNumbers();
+                });
+                clockNumbersContainer.appendChild(numEl);
+            }
+            if (clockPointer) clockPointer.style.transform = `rotate(${selectedHour * 30}deg)`;
+        } else {
+            const minutes = [0, 5, 10, 15, 20, 25, 30, 35, 40, 45, 50, 55];
+            minutes.forEach((m, idx) => {
+                const angle = (idx * 30 - 90) * (Math.PI / 180);
+                const x = Math.round(centerX + radius * Math.cos(angle) - 16);
+                const y = Math.round(centerY + radius * Math.sin(angle) - 16);
+                const numEl = document.createElement('div');
+                numEl.className = `clock-number-item ${selectedMinute === m ? 'active' : ''}`;
+                numEl.style.left = `${x}px`;
+                numEl.style.top = `${y}px`;
+                numEl.textContent = m < 10 ? `0${m}` : m;
+                numEl.addEventListener('click', () => {
+                    selectedMinute = m;
+                    updateClockDisplay();
+                    renderClockNumbers();
+                });
+                clockNumbersContainer.appendChild(numEl);
+            });
+            if (clockPointer) clockPointer.style.transform = `rotate(${selectedMinute * 6}deg)`;
+        }
+    }
+
+    // 5. Quick Minute Buttons in Modal
+    document.querySelectorAll('.clock-quick-min').forEach(btn => {
+        btn.addEventListener('click', function () {
+            selectedMinute = parseInt(this.getAttribute('data-min'), 10) || 0;
+            updateClockDisplay();
+            if (clockMode === 'minute') renderClockNumbers();
+        });
+    });
+
+    // 6. Confirm and Apply Time
+    if (btnConfirmClock) {
+        btnConfirmClock.addEventListener('click', function () {
+            if (!currentTargetInput) return;
+
+            let h24 = selectedHour;
+            if (selectedPeriod === 'PM' && selectedHour < 12) {
+                h24 += 12;
+            } else if (selectedPeriod === 'AM' && selectedHour === 12) {
+                h24 = 0;
+            }
+            const hStr = (h24 < 10) ? `0${h24}` : `${h24}`;
+            const mStr = (selectedMinute < 10) ? `0${selectedMinute}` : `${selectedMinute}`;
+            currentTargetInput.value = `${hStr}:${mStr}`;
+
+            // Trigger change event to auto-calculate expected hours
+            currentTargetInput.dispatchEvent(new Event('change', { bubbles: true }));
+
+            if (clockModal) clockModal.hide();
+        });
+    }
+
+    // 7. Quick Clock Preset Buttons (Below input fields)
+    document.querySelectorAll('.clock-preset-btn').forEach(btn => {
+        btn.addEventListener('click', function () {
+            const targetId = this.getAttribute('data-target');
+            const targetVal = this.getAttribute('data-val');
+            const targetInput = document.getElementById(targetId);
+            if (targetInput) {
+                targetInput.value = targetVal;
+                targetInput.dispatchEvent(new Event('change', { bubbles: true }));
+
+                // Highlight active preset button in group
+                const parent = this.parentElement;
+                if (parent) {
+                    parent.querySelectorAll('.clock-preset-btn').forEach(b => {
+                        b.classList.remove('active', 'btn-outline-primary');
+                        b.classList.add('btn-outline-secondary');
+                    });
+                    this.classList.remove('btn-outline-secondary');
+                    this.classList.add('active', 'btn-outline-primary');
+                }
+            }
+        });
+    });
+
+    // 8. Real-time Expected Hours Auto-Calculation & Overnight Detection
+    function recalculateExpectedHours(isUserDirectEdit = false) {
+        if (!startInput || !endInput || !hoursInput) return;
+        const startVal = startInput.value;
+        const endVal = endInput.value;
+        if (!startVal || !endVal) return;
+
+        const [sh, sm] = startVal.split(':').map(Number);
+        const [eh, em] = endVal.split(':').map(Number);
+
+        let startMin = sh * 60 + sm;
+        let endMin = eh * 60 + em;
+        let diffMin = endMin - startMin;
+        let isOvernight = false;
+
+        if (diffMin <= 0) {
+            diffMin += 24 * 60;
+            isOvernight = true;
+        }
+
+        if (overnightCheck) {
+            overnightCheck.checked = isOvernight;
+        }
+
+        const calculatedHours = (diffMin / 60).toFixed(2);
+
+        if (!isUserDirectEdit) {
+            hoursInput.value = calculatedHours;
+            if (feedbackBadge) {
+                feedbackBadge.innerHTML = `<span class="badge bg-success-subtle text-success border border-success-subtle"><i class="bi bi-magic me-1"></i>Auto-calculated: <strong>${calculatedHours} hrs</strong></span> <span class="text-muted ms-1">(${startVal} to ${endVal})</span>`;
+            }
+        }
+    }
+
+    if (startInput) {
+        startInput.addEventListener('change', () => recalculateExpectedHours(false));
+    }
+    if (endInput) {
+        endInput.addEventListener('change', () => recalculateExpectedHours(false));
+    }
+
+    if (hoursInput) {
+        hoursInput.addEventListener('input', function () {
+            if (feedbackBadge) {
+                feedbackBadge.innerHTML = `<span class="badge bg-primary-subtle text-primary border border-primary-subtle"><i class="bi bi-pencil-fill me-1"></i>Modified on the spot: <strong>${this.value} hrs</strong></span>`;
+            }
+        });
+    }
+
+    // Initial check on load
+    if (startInput && endInput && startInput.value && endInput.value) {
+        if (!hoursInput.value || hoursInput.value === '0.00' || hoursInput.value === '0') {
+            recalculateExpectedHours(false);
+        }
+    }
+});
+</script>
+{% endblock %}

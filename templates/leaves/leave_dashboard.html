@@ -1,0 +1,228 @@
+{% extends 'base.html' %}
+
+{% block title %}Leave Portal &mdash; Smart HRMS{% endblock %}
+{% block page_title %}Leave Management Portal{% endblock %}
+
+{% block content %}
+<div class="d-flex flex-column flex-sm-row justify-content-between align-items-start align-items-sm-center gap-3 mb-4">
+    <div>
+        <h4 class="fw-bold mb-1 text-dark">
+            <i class="bi bi-journal-medical text-primary me-2"></i> Leave Management Portal ({{ current_year }})
+        </h4>
+        <p class="text-muted small mb-0">Track your available leave quotas, apply for time off, and manage approvals</p>
+    </div>
+    <div class="d-flex flex-wrap gap-2">
+        {% if request.user.is_hr_admin %}
+        <a href="{% url 'leaves:types_list' %}" class="btn btn-outline-secondary btn-sm shadow-sm">
+            <i class="bi bi-gear me-1"></i> Leave Categories
+        </a>
+        <a href="{% url 'leaves:balances_manage' %}" class="btn btn-outline-secondary btn-sm shadow-sm">
+            <i class="bi bi-wallet2 me-1"></i> Employee Balances
+        </a>
+        {% endif %}
+        <a href="{% url 'leaves:list' %}" class="btn btn-outline-primary btn-sm shadow-sm">
+            <i class="bi bi-list-task me-1"></i> All Applications
+        </a>
+        <a href="{% url 'leaves:apply' %}" class="btn btn-primary btn-sm shadow-sm">
+            <i class="bi bi-plus-circle me-1"></i> Apply for Leave
+        </a>
+    </div>
+</div>
+
+<!-- Personal Balance Summary Cards (if linked employee) -->
+{% if employee %}
+<div class="row g-3 mb-4">
+    <div class="col-6 col-md-3">
+        <div class="card card-stat p-3 text-center border-start border-primary border-3">
+            <div class="text-muted small fw-semibold">Total Quota</div>
+            <div class="fs-4 fw-bold text-dark mt-1">{{ total_entitled }} <span class="fs-6 text-muted fw-normal">days</span></div>
+        </div>
+    </div>
+    <div class="col-6 col-md-3">
+        <div class="card card-stat p-3 text-center border-start border-success border-3">
+            <div class="text-muted small fw-semibold">Available Balance</div>
+            <div class="fs-4 fw-bold text-success mt-1">{{ total_available }} <span class="fs-6 text-muted fw-normal">days</span></div>
+        </div>
+    </div>
+    <div class="col-6 col-md-3">
+        <div class="card card-stat p-3 text-center border-start border-warning border-3">
+            <div class="text-muted small fw-semibold">Pending Requests</div>
+            <div class="fs-4 fw-bold text-warning mt-1">{{ total_pending }} <span class="fs-6 text-muted fw-normal">days</span></div>
+        </div>
+    </div>
+    <div class="col-6 col-md-3">
+        <div class="card card-stat p-3 text-center border-start border-secondary border-3">
+            <div class="text-muted small fw-semibold">Utilized Days</div>
+            <div class="fs-4 fw-bold text-secondary mt-1">{{ total_used }} <span class="fs-6 text-muted fw-normal">days</span></div>
+        </div>
+    </div>
+</div>
+
+<!-- Category Quota Details -->
+<div class="row g-3 mb-4">
+    {% for bal in balances %}
+    <div class="col-12 col-md-6 col-lg-4">
+        <div class="card card-stat p-3 h-100">
+            <div class="d-flex justify-content-between align-items-start mb-2">
+                <div>
+                    <h6 class="fw-bold mb-0 text-dark">{{ bal.leave_type.name }} ({{ bal.leave_type.code }})</h6>
+                    <small class="text-muted">{% if bal.leave_type.is_paid %}Paid Leave{% else %}Unpaid (LWP){% endif %}</small>
+                </div>
+                <span class="badge {% if bal.available_days > 2 %}bg-success{% elif bal.available_days > 0 %}bg-warning text-dark{% else %}bg-secondary{% endif %} fs-6 px-2 py-1">
+                    {{ bal.available_days }} Avail
+                </span>
+            </div>
+            <div class="small text-muted mb-2">
+                <div>Allocated: <strong>{{ bal.allocated_days }}</strong> | Carried: <strong>{{ bal.carried_forward_days }}</strong></div>
+                <div>Used: <strong class="text-secondary">{{ bal.used_days }}</strong> | Pending: <strong class="text-warning">{{ bal.pending_days }}</strong></div>
+            </div>
+            <div class="progress" style="height: 6px;">
+                {% if bal.total_entitled > 0 %}
+                <div class="progress-bar bg-success" role="progressbar" style="width: {% widthratio bal.available_days bal.total_entitled 100 %}%;"></div>
+                <div class="progress-bar bg-warning" role="progressbar" style="width: {% widthratio bal.pending_days bal.total_entitled 100 %}%;"></div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+    {% empty %}
+    <div class="col-12">
+        <div class="alert alert-light border text-muted py-3">
+            <i class="bi bi-info-circle me-2"></i> No active leave balances configured for {{ current_year }}. Contact HR for quota assignment.
+        </div>
+    </div>
+    {% endfor %}
+</div>
+{% endif %}
+
+<!-- Pending Team Approvals (if Manager, HR or Super Admin) -->
+{% if pending_approvals %}
+<div class="card card-stat mb-4 border-start border-warning border-4">
+    <div class="card-header bg-white py-3 d-flex justify-content-between align-items-center">
+        <div class="d-flex align-items-center gap-2">
+            <span class="badge bg-warning text-dark rounded-pill">{{ pending_approvals|length }}</span>
+            <h6 class="fw-bold mb-0 text-dark">Pending Approvals Requiring Your Action</h6>
+        </div>
+        <a href="{% url 'leaves:list' %}?status=pending" class="btn btn-link btn-sm text-decoration-none p-0">View All</a>
+    </div>
+    <div class="table-responsive">
+        <table class="table table-hover align-middle mb-0">
+            <thead class="table-light">
+                <tr>
+                    <th>Applicant</th>
+                    <th>Leave Category</th>
+                    <th>Dates Span</th>
+                    <th>Working Days</th>
+                    <th>Reason</th>
+                    <th class="text-end">Actions</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for app in pending_approvals %}
+                <tr>
+                    <td>
+                        <div class="fw-bold text-dark">{{ app.employee.get_full_name }}</div>
+                        <small class="text-muted">{{ app.employee.employee_id }} &bull; {{ app.company.code }}</small>
+                    </td>
+                    <td>
+                        <span class="badge bg-light text-dark border">{{ app.leave_type.code }}</span>
+                        <small class="text-muted d-block">{{ app.leave_type.name }}</small>
+                    </td>
+                    <td>
+                        <div class="small fw-semibold">{{ app.start_date|date:"d M Y" }} to {{ app.end_date|date:"d M Y" }}</div>
+                        {% if app.is_half_day %}
+                        <span class="badge bg-info text-dark" style="font-size: 0.7rem;">Half-Day ({{ app.get_half_day_session_display }})</span>
+                        {% endif %}
+                    </td>
+                    <td>
+                        <span class="badge bg-primary fs-6">{{ app.total_days }}</span>
+                    </td>
+                    <td>
+                        <div class="text-truncate" style="max-width: 220px;" title="{{ app.reason }}">{{ app.reason }}</div>
+                        {% if app.attachment %}
+                        <a href="{{ app.attachment.url }}" target="_blank" class="small text-decoration-none">
+                            <i class="bi bi-paperclip"></i> Doc
+                        </a>
+                        {% endif %}
+                    </td>
+                    <td class="text-end">
+                        <div class="d-flex gap-1 justify-content-end">
+                            <form method="post" action="{% url 'leaves:approve' app.id %}" class="d-inline">
+                                {% csrf_token %}
+                                <button type="submit" class="btn btn-sm btn-success shadow-sm" title="Quick Approve">
+                                    <i class="bi bi-check-lg"></i> Approve
+                                </button>
+                            </form>
+                            <a href="{% url 'leaves:detail' app.id %}" class="btn btn-sm btn-outline-secondary shadow-sm" title="Review Details">
+                                <i class="bi bi-eye"></i>
+                            </a>
+                        </div>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+{% endif %}
+
+<!-- My Recent Applications -->
+{% if employee %}
+<div class="card card-stat">
+    <div class="card-header bg-white py-3 d-flex justify-content-between align-items-center">
+        <h6 class="fw-bold mb-0 text-dark">My Leave Applications</h6>
+        <a href="{% url 'leaves:list' %}" class="btn btn-link btn-sm text-decoration-none p-0">View All</a>
+    </div>
+    <div class="table-responsive">
+        <table class="table table-hover align-middle mb-0">
+            <thead class="table-light">
+                <tr>
+                    <th>Leave Category</th>
+                    <th>Dates Span</th>
+                    <th>Working Days</th>
+                    <th>Applied On</th>
+                    <th>Status</th>
+                    <th class="text-end">Actions</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for app in my_applications %}
+                <tr>
+                    <td>
+                        <span class="fw-bold text-dark">{{ app.leave_type.name }}</span>
+                        <small class="text-muted d-block">{{ app.leave_type.code }}</small>
+                    </td>
+                    <td>
+                        <div>{{ app.start_date|date:"d M Y" }} to {{ app.end_date|date:"d M Y" }}</div>
+                        {% if app.is_half_day %}
+                        <span class="badge bg-light text-dark border" style="font-size: 0.7rem;">Half-Day</span>
+                        {% endif %}
+                    </td>
+                    <td>
+                        <span class="fw-semibold">{{ app.total_days }} day(s)</span>
+                    </td>
+                    <td class="text-muted small">
+                        {{ app.created_at|date:"d M Y, H:i" }}
+                    </td>
+                    <td>
+                        <span class="badge {{ app.get_status_badge_class }}">{{ app.get_status_display }}</span>
+                    </td>
+                    <td class="text-end">
+                        <a href="{% url 'leaves:detail' app.id %}" class="btn btn-sm btn-outline-primary">
+                            Details
+                        </a>
+                    </td>
+                </tr>
+                {% empty %}
+                <tr>
+                    <td colspan="6" class="text-center py-4 text-muted">
+                        <i class="bi bi-inbox fs-3 d-block mb-2"></i>
+                        You have not submitted any leave applications yet.
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+{% endif %}
+{% endblock %}

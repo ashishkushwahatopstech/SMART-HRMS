@@ -1,0 +1,80 @@
+{% extends 'base.html' %}
+
+{% block title %}{{ title }} &mdash; Smart HRMS{% endblock %}
+{% block page_title %}{{ title }}{% endblock %}
+
+{% block content %}
+<div class="row justify-content-center">
+    <div class="col-lg-6">
+        <div class="card card-stat p-4">
+            <div class="d-flex justify-content-between align-items-center mb-4 pb-2 border-bottom">
+                <div>
+                    <h5 class="fw-bold mb-1 text-dark">
+                        <i class="bi bi-calendar2-plus text-primary me-2"></i> {{ title }}
+                    </h5>
+                    <p class="text-muted small mb-0">Define public gazetted holidays or optional corporate observances</p>
+                </div>
+                <a href="{% url 'holidays:list' %}" class="btn btn-outline-secondary btn-sm">
+                    <i class="bi bi-x-lg me-1"></i> Cancel
+                </a>
+            </div>
+
+            <form method="post" novalidate>
+                {% csrf_token %}
+
+                {% if form.non_field_errors %}
+                <div class="alert alert-danger py-2 px-3 small mb-3">
+                    {% for error in form.non_field_errors %}
+                        <div><i class="bi bi-exclamation-triangle-fill me-1"></i> {{ error }}</div>
+                    {% endfor %}
+                </div>
+                {% endif %}
+
+                <div class="mb-3">
+                    <label class="form-label fw-semibold small text-dark">Applicable Company <span class="text-danger">*</span></label>
+                    {{ form.company }}
+                    {% if form.company.errors %}<div class="text-danger small mt-1">{{ form.company.errors.0 }}</div>{% endif %}
+                </div>
+
+                <div class="mb-3">
+                    <label class="form-label fw-semibold small text-dark">Holiday Name <span class="text-danger">*</span></label>
+                    {{ form.name }}
+                    {% if form.name.errors %}<div class="text-danger small mt-1">{{ form.name.errors.0 }}</div>{% endif %}
+                </div>
+
+                <div class="row g-3 mb-3">
+                    <div class="col-md-6">
+                        <label class="form-label fw-semibold small text-dark">Observance Date <span class="text-danger">*</span></label>
+                        {{ form.date }}
+                        {% if form.date.errors %}<div class="text-danger small mt-1">{{ form.date.errors.0 }}</div>{% endif %}
+                    </div>
+                    <div class="col-md-6">
+                        <label class="form-label fw-semibold small text-dark">Holiday Classification <span class="text-danger">*</span></label>
+                        {{ form.holiday_type }}
+                        {% if form.holiday_type.errors %}<div class="text-danger small mt-1">{{ form.holiday_type.errors.0 }}</div>{% endif %}
+                    </div>
+                </div>
+
+                <div class="form-check mb-3">
+                    {{ form.is_optional }}
+                    <label class="form-check-label small text-dark" for="is_optional">
+                        <strong>Optional / Restricted Holiday</strong> (Employees may opt to work or take floating leave)
+                    </label>
+                </div>
+
+                <div class="mb-4">
+                    <label class="form-label fw-semibold small text-dark">Description / Historical Background</label>
+                    {{ form.description }}
+                </div>
+
+                <div class="d-flex justify-content-end gap-2">
+                    <a href="{% url 'holidays:list' %}" class="btn btn-outline-secondary">Cancel</a>
+                    <button type="submit" class="btn btn-primary px-4 shadow-sm">
+                        <i class="bi bi-check-circle me-1"></i> {% if is_edit %}Save Changes{% else %}Add Holiday{% endif %}
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+{% endblock %}

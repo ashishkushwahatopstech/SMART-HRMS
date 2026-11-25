@@ -1,0 +1,64 @@
+{% extends 'emails/base_email.html' %}
+
+{% block email_title %}Missed Punch Regularization Requested &mdash; Smart HRMS{% endblock %}
+{% block preheader %}Attendance regularization requested by {{ employee.get_full_name }} for {{ punch_request.date|date:"d M Y" }}.{% endblock %}
+
+{% block header_badge %}
+<span style="background-color: rgba(245, 158, 11, 0.2); color: #fbbf24; font-size: 11px; font-weight: 600; padding: 4px 10px; border-radius: 20px; letter-spacing: 0.5px; text-transform: uppercase;">
+    Punch Request
+</span>
+{% endblock %}
+
+{% block content %}
+<div style="margin-bottom: 20px;">
+    <h1 style="font-size: 22px; font-weight: 700; color: #0f172a; margin: 0 0 8px 0; letter-spacing: -0.3px;">
+        Missed Punch Regularization Requested
+    </h1>
+    <p style="font-size: 15px; color: #475569; margin: 0; line-height: 1.6;">
+        An employee has submitted an attendance regularization request for a previous date when they missed or forgot their biometric camera punch.
+    </p>
+</div>
+
+<div style="background-color: #f8fafc; border: 1px solid #e2e8f0; border-radius: 10px; padding: 20px; margin: 24px 0;">
+    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="font-size: 14px; line-height: 1.6;">
+        <tr>
+            <td style="padding: 6px 0; color: #64748b; width: 140px;">Employee:</td>
+            <td style="padding: 6px 0; color: #0f172a; font-weight: 600;">
+                {{ employee.get_full_name }} ({{ employee.employee_id }})
+            </td>
+        </tr>
+        <tr>
+            <td style="padding: 6px 0; color: #64748b;">Missed Date:</td>
+            <td style="padding: 6px 0; color: #0f172a; font-weight: 600;">
+                {{ punch_request.date|date:"d F Y" }} ({{ punch_request.date|date:"l" }})
+            </td>
+        </tr>
+        <tr>
+            <td style="padding: 6px 0; color: #64748b;">Scope:</td>
+            <td style="padding: 6px 0; color: #0f172a;">
+                {{ punch_request.get_punch_type_display }}
+            </td>
+        </tr>
+        <tr>
+            <td style="padding: 6px 0; color: #64748b;">Claimed Timings:</td>
+            <td style="padding: 6px 0; color: #4f46e5; font-family: ui-monospace, monospace; font-weight: 700;">
+                {% if punch_request.check_in_time %}{{ punch_request.check_in_time|time:"h:i A" }}{% endif %}
+                {% if punch_request.check_in_time and punch_request.check_out_time %} &rarr; {% endif %}
+                {% if punch_request.check_out_time %}{{ punch_request.check_out_time|time:"h:i A" }}{% endif %}
+            </td>
+        </tr>
+        <tr>
+            <td style="padding: 6px 0; color: #64748b; vertical-align: top;">Business Reason:</td>
+            <td style="padding: 6px 0; color: #334155; font-style: italic;">
+                "{{ punch_request.reason }}"
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div style="text-align: center; margin: 28px 0 20px 0;">
+    <a href="{{ review_url }}" style="background-color: #4f46e5; color: #ffffff; text-decoration: none; padding: 13px 32px; border-radius: 8px; font-weight: 600; font-size: 14px; display: inline-block;">
+        Review &amp; Approve Request &rarr;
+    </a>
+</div>
+{% endblock %}

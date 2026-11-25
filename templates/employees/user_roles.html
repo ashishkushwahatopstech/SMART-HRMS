@@ -1,0 +1,192 @@
+{% extends 'base.html' %}
+
+{% block title %}System Users & Roles &mdash; Smart HRMS{% endblock %}
+{% block page_title %}System Users & Access Roles{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4 flex-wrap gap-2">
+    <div>
+        <h4 class="fw-bold mb-1 text-dark">
+            <i class="bi bi-shield-lock text-primary me-2"></i> System Users & Role Permissions
+        </h4>
+        <p class="text-muted small mb-0">Manage system login accounts, assign HR Admin or Manager privileges, and oversee access levels</p>
+    </div>
+    <div class="d-flex gap-2">
+        <a href="{% url 'employees:create' %}" class="btn btn-primary btn-sm">
+            <i class="bi bi-person-plus-fill me-1"></i> Register New Staff & Account
+        </a>
+    </div>
+</div>
+
+<!-- Stat Cards -->
+<div class="row g-3 mb-4">
+    <div class="col-sm-6 col-lg-3">
+        <div class="card card-stat p-3 border-start border-primary border-4">
+            <div class="d-flex justify-content-between align-items-center">
+                <div>
+                    <div class="text-muted small fw-semibold">Total Users</div>
+                    <h3 class="fw-bold text-dark mt-1 mb-0">{{ users.count }}</h3>
+                </div>
+                <div class="stat-icon primary">
+                    <i class="bi bi-people-fill"></i>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="col-sm-6 col-lg-3">
+        <div class="card card-stat p-3 border-start border-danger border-4">
+            <div class="d-flex justify-content-between align-items-center">
+                <div>
+                    <div class="text-muted small fw-semibold">HR Administrators</div>
+                    <h3 class="fw-bold text-dark mt-1 mb-0">{{ hr_count }}</h3>
+                </div>
+                <div class="stat-icon danger">
+                    <i class="bi bi-shield-fill-check"></i>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="col-sm-6 col-lg-3">
+        <div class="card card-stat p-3 border-start border-warning border-4">
+            <div class="d-flex justify-content-between align-items-center">
+                <div>
+                    <div class="text-muted small fw-semibold">Managers</div>
+                    <h3 class="fw-bold text-dark mt-1 mb-0">{{ manager_count }}</h3>
+                </div>
+                <div class="stat-icon warning">
+                    <i class="bi bi-person-workspace"></i>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="col-sm-6 col-lg-3">
+        <div class="card card-stat p-3 border-start border-info border-4">
+            <div class="d-flex justify-content-between align-items-center">
+                <div>
+                    <div class="text-muted small fw-semibold">Employees</div>
+                    <h3 class="fw-bold text-dark mt-1 mb-0">{{ employee_count }}</h3>
+                </div>
+                <div class="stat-icon info">
+                    <i class="bi bi-person-badge"></i>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Quick Help Card -->
+<div class="alert alert-info border-0 shadow-sm rounded-3 mb-4 d-flex align-items-center gap-3">
+    <i class="bi bi-info-circle-fill fs-3 text-info flex-shrink-0"></i>
+    <div class="small">
+        <strong>How to assign roles:</strong>
+        Select a new role (<strong>HR Administrator</strong>, <strong>Manager</strong>, or <strong>Employee</strong>) from the dropdown under <em>Change Role</em> for any user below. The change takes effect immediately, granting or updating portal navigation and permission access.
+    </div>
+</div>
+
+<!-- Users Table Card -->
+<div class="card card-stat p-4">
+    <div class="table-responsive">
+        <table class="table table-hover align-middle mb-0">
+            <thead class="table-light">
+                <tr>
+                    <th style="min-width: 220px;">User / Identity</th>
+                    <th>Email Address</th>
+                    <th>Company</th>
+                    <th>Linked Profile</th>
+                    <th>Current System Role</th>
+                    <th style="min-width: 200px;">Change Role</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for u in users %}
+                <tr>
+                    <td>
+                        <div class="d-flex align-items-center gap-3">
+                            <div class="avatar-circle-sm bg-primary text-white fw-bold d-flex align-items-center justify-content-center rounded-circle" style="width: 38px; height: 38px; font-size: 0.85rem;">
+                                {{ u.first_name|default:u.username|slice:":1"|upper }}{{ u.last_name|slice:":1"|upper }}
+                            </div>
+                            <div>
+                                <div class="fw-bold text-dark">
+                                    {{ u.get_full_name|default:u.username }}
+                                    {% if u.is_superuser %}
+                                    <span class="badge bg-dark text-white ms-1" style="font-size: 0.65rem;">Superuser</span>
+                                    {% endif %}
+                                </div>
+                                <div class="text-muted small"><code>@{{ u.username }}</code></div>
+                            </div>
+                        </div>
+                    </td>
+                    <td>
+                        <a href="mailto:{{ u.email }}" class="text-decoration-none text-muted small">
+                            <i class="bi bi-envelope me-1"></i>{{ u.email|default:"No Email" }}
+                        </a>
+                    </td>
+                    <td>
+                        {% if u.employee_profile and u.employee_profile.company %}
+                            <span class="badge bg-light text-dark border">
+                                <i class="bi bi-building me-1"></i>{{ u.employee_profile.company.name }}
+                            </span>
+                        {% else %}
+                            <span class="text-muted small">All Companies (Global)</span>
+                        {% endif %}
+                    </td>
+                    <td>
+                        {% if u.employee_profile %}
+                            <a href="{% url 'employees:detail' u.employee_profile.pk %}" class="text-decoration-none fw-semibold small">
+                                <i class="bi bi-person-badge me-1"></i>{{ u.employee_profile.employee_id }}
+                            </a>
+                        {% else %}
+                            <span class="text-muted small"><em>Standalone User</em></span>
+                        {% endif %}
+                    </td>
+                    <td>
+                        {% if u.is_super_admin %}
+                            <span class="badge bg-dark text-white px-2 py-1">
+                                <i class="bi bi-shield-fill text-danger me-1"></i>Super Admin
+                            </span>
+                        {% elif u.is_hr_admin %}
+                            <span class="badge bg-danger-subtle text-danger border border-danger-subtle px-2 py-1">
+                                <i class="bi bi-shield-fill-check me-1"></i>HR Administrator
+                            </span>
+                        {% elif u.is_manager %}
+                            <span class="badge bg-warning-subtle text-warning border border-warning-subtle px-2 py-1">
+                                <i class="bi bi-person-workspace me-1"></i>Manager
+                            </span>
+                        {% else %}
+                            <span class="badge bg-primary-subtle text-primary border border-primary-subtle px-2 py-1">
+                                <i class="bi bi-person me-1"></i>Employee
+                            </span>
+                        {% endif %}
+                    </td>
+                    <td>
+                        {% if u.is_superuser and u == request.user %}
+                            <span class="text-muted small"><em>Current Super Admin</em></span>
+                        {% else %}
+                            <form method="post" action="{% url 'employees:user_roles' %}" class="d-flex align-items-center gap-2">
+                                {% csrf_token %}
+                                <input type="hidden" name="user_id" value="{{ u.id }}">
+                                <select name="role" class="form-select form-select-sm" onchange="this.form.submit()">
+                                    <option value="employee" {% if u.role == 'employee' %}selected{% endif %}>Employee</option>
+                                    <option value="manager" {% if u.role == 'manager' %}selected{% endif %}>Manager</option>
+                                    <option value="hr_admin" {% if u.role == 'hr_admin' %}selected{% endif %}>HR Administrator</option>
+                                </select>
+                                <noscript>
+                                    <button type="submit" class="btn btn-sm btn-primary">Save</button>
+                                </noscript>
+                            </form>
+                        {% endif %}
+                    </td>
+                </tr>
+                {% empty %}
+                <tr>
+                    <td colspan="6" class="text-center py-4 text-muted">
+                        <i class="bi bi-people fs-2 d-block mb-2"></i>
+                        No system users found.
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+{% endblock %}

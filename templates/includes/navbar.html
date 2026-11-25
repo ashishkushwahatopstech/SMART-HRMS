@@ -1,0 +1,84 @@
+<nav class="top-navbar">
+    <div class="d-flex align-items-center gap-2 gap-sm-3">
+        <button class="btn-toggle-sidebar" id="sidebarToggle" type="button" title="Toggle Navigation Menu">
+            <i class="bi bi-list"></i>
+        </button>
+        <div class="d-none d-md-flex align-items-center gap-2 text-muted small">
+            <i class="bi bi-grid-1x2"></i>
+            <span>Smart HRMS</span>
+            <span>&bull;</span>
+            <span class="fw-semibold text-dark">{% block page_title %}Dashboard{% endblock %}</span>
+        </div>
+    </div>
+
+    <div class="d-flex align-items-center gap-2 gap-sm-3">
+        {% if request.user.role in 'super_admin,hr_admin,manager' %}
+        <!-- Direct Universal Face Cam Attendance Button (Admin/HR/Manager Only) -->
+        <a href="{% url 'attendance:face_kiosk' %}" class="btn btn-sm btn-danger d-flex align-items-center gap-1 gap-sm-2 px-2 px-sm-3 py-1 py-sm-2 rounded-pill shadow-sm text-decoration-none fw-bold" title="Universal Face Attendance Camera" style="letter-spacing: 0.2px;">
+            <i class="bi bi-camera-video-fill"></i>
+            <span class="d-none d-sm-inline" style="font-size: 0.8rem;">Face Cam Attendance</span>
+            <span class="d-inline d-sm-none" style="font-size: 0.75rem;">Face Cam</span>
+        </a>
+        {% elif request.user.role == 'employee' %}
+        <!-- Self Camera Punch Button for Employees -->
+        <a href="{% url 'attendance:my_attendance' %}?punch=camera" class="btn btn-sm btn-success d-flex align-items-center gap-1 gap-sm-2 px-2 px-sm-3 py-1 py-sm-2 rounded-pill shadow-sm text-decoration-none fw-bold" title="Self Biometric Camera Punch" style="letter-spacing: 0.2px;">
+            <i class="bi bi-camera-video-fill"></i>
+            <span class="d-none d-sm-inline" style="font-size: 0.8rem;">Self Camera Punch</span>
+            <span class="d-inline d-sm-none" style="font-size: 0.75rem;">Camera Punch</span>
+        </a>
+        {% endif %}
+
+        <!-- Live System Clock -->
+        <div class="digital-clock d-none d-sm-flex align-items-center gap-1">
+            <i class="bi bi-clock text-primary"></i>
+            <span id="liveClock">--:--:--</span>
+        </div>
+
+        <!-- User Role Badge -->
+        <span class="badge {{ request.user.get_role_badge_class }} rounded-pill px-2 px-sm-3 py-1 py-sm-2" style="font-size: 0.75rem;">
+            {{ request.user.get_role_display }}
+        </span>
+
+        <!-- User Profile Dropdown -->
+        <div class="dropdown">
+            <button class="btn btn-link p-0 text-decoration-none dropdown-toggle d-flex align-items-center gap-2" type="button" data-bs-toggle="dropdown" aria-expanded="false">
+                {% if request.user.avatar %}
+                    <img src="{{ request.user.avatar.url }}" alt="{{ request.user.get_display_name }}" class="avatar-circle">
+                {% else %}
+                    <span class="avatar-circle">{{ request.user.username|make_list|first|upper }}</span>
+                {% endif %}
+                <span class="d-none d-md-inline fw-semibold text-dark small">{{ request.user.get_display_name }}</span>
+            </button>
+            <ul class="dropdown-menu dropdown-menu-end shadow border-0 mt-2">
+                <li class="px-3 py-2 border-bottom">
+                    <div class="fw-bold text-dark">{{ request.user.get_display_name }}</div>
+                    <div class="text-muted small">@{{ request.user.username }}</div>
+                    <div class="badge {{ request.user.get_role_badge_class }} mt-1">{{ request.user.get_role_display }}</div>
+                </li>
+                <li>
+                    <a class="dropdown-item py-2" href="{% url 'accounts:profile' %}">
+                        <i class="bi bi-person me-2 text-primary"></i> My Profile
+                    </a>
+                </li>
+                <li>
+                    <a class="dropdown-item py-2" href="{% url 'accounts:change_password' %}">
+                        <i class="bi bi-key me-2 text-warning"></i> Change Password
+                    </a>
+                </li>
+                {% if request.user.is_superuser %}
+                <li>
+                    <a class="dropdown-item py-2" href="{% url 'admin:index' %}" target="_blank">
+                        <i class="bi bi-shield-lock me-2 text-danger"></i> Django Admin
+                    </a>
+                </li>
+                {% endif %}
+                <li><hr class="dropdown-divider"></li>
+                <li>
+                    <a class="dropdown-item py-2 text-danger" href="{% url 'accounts:logout' %}">
+                        <i class="bi bi-box-arrow-right me-2"></i> Secure Logout
+                    </a>
+                </li>
+            </ul>
+        </div>
+    </div>
+</nav>

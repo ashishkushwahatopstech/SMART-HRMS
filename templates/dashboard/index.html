@@ -1,0 +1,559 @@
+{% extends 'base.html' %}
+
+{% block title %}Dashboard &mdash; Smart HRMS{% endblock %}
+{% block page_title %}Dashboard{% endblock %}
+
+{% block content %}
+<!-- Welcome Banner -->
+<div class="card border-0 mb-4 shadow-sm" style="background: linear-gradient(135deg, #4361ee 0%, #3a0ca3 100%); color: #ffffff; border-radius: 14px;">
+    <div class="card-body p-4">
+        <div class="d-flex flex-column flex-md-row justify-content-between align-items-start align-items-md-center gap-3">
+            <div>
+                <div class="d-flex flex-wrap align-items-center gap-2 mb-1">
+                    <h3 class="fw-bold mb-0">Welcome, {{ request.user.get_display_name }}!</h3>
+                    <span class="badge bg-white text-primary fw-bold">{{ request.user.get_role_display }}</span>
+                </div>
+                <p class="mb-0 opacity-75 small">
+                    Smart HRMS is running locally. Authentication, role-based access control, and base dashboard are active (Phase 1).
+                </p>
+            </div>
+            <div class="d-flex flex-wrap gap-2">
+                {% if request.user.role in 'super_admin,hr_admin,manager' %}
+                <a href="{% url 'attendance:face_kiosk' %}" class="btn btn-danger btn-sm fw-bold shadow-sm d-flex align-items-center gap-1">
+                    <i class="bi bi-camera-video-fill"></i> Universal Face Cam
+                </a>
+                {% elif request.user.role == 'employee' %}
+                <a href="{% url 'attendance:my_attendance' %}?punch=camera" class="btn btn-success btn-sm fw-bold shadow-sm d-flex align-items-center gap-1">
+                    <i class="bi bi-camera-video-fill"></i> Self Camera Punch
+                </a>
+                {% endif %}
+                <a href="{% url 'accounts:profile' %}" class="btn btn-light btn-sm fw-semibold">
+                    <i class="bi bi-person me-1"></i> Edit Profile
+                </a>
+                {% if request.user.is_superuser %}
+                <a href="{% url 'admin:index' %}" target="_blank" class="btn btn-outline-light btn-sm fw-semibold">
+                    <i class="bi bi-gear-fill me-1"></i> Django Admin
+                </a>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+
+{% if request.user.role in 'super_admin,hr_admin,manager' %}
+<!-- Quick Universal Face Cam Access Banner (Admin/HR/Manager Only) -->
+<div class="card border-0 shadow-sm mb-4 bg-white" style="border-radius: 12px; border-left: 5px solid #ef4444 !important;">
+    <div class="card-body p-3 p-sm-4 d-flex flex-column flex-md-row justify-content-between align-items-start align-items-md-center gap-3">
+        <div class="d-flex align-items-center gap-3 min-w-0">
+            <div class="p-3 rounded-circle bg-danger bg-opacity-10 text-danger flex-shrink-0">
+                <i class="bi bi-person-bounding-box fs-2"></i>
+            </div>
+            <div class="min-w-0">
+                <div class="d-flex align-items-center gap-2 flex-wrap">
+                    <h5 class="fw-bold mb-0 text-dark">Universal Face Recognition Attendance</h5>
+                    <span class="badge bg-success-subtle text-success border border-success-subtle">Contactless</span>
+                    <span class="badge bg-danger-subtle text-danger border border-danger-subtle">Universal Terminal</span>
+                </div>
+                <p class="text-muted small mb-0 mt-1">
+                    One universal camera terminal for all employees. Simply step in front of the camera to automatically log attendance with real-time face verification.
+                </p>
+            </div>
+        </div>
+        <div class="flex-shrink-0">
+            <a href="{% url 'attendance:face_kiosk' %}" class="btn btn-danger px-4 py-2 fw-bold text-nowrap shadow-sm d-flex align-items-center gap-2">
+                <i class="bi bi-camera-video-fill"></i> Launch Face Attendance Cam &rarr;
+            </a>
+        </div>
+    </div>
+</div>
+{% elif request.user.role == 'employee' %}
+<!-- Quick Employee Self Camera Punch Banner -->
+<div class="card border-0 shadow-sm mb-4 bg-white" style="border-radius: 12px; border-left: 5px solid #22c55e !important;">
+    <div class="card-body p-3 p-sm-4 d-flex flex-column flex-md-row justify-content-between align-items-start align-items-md-center gap-3">
+        <div class="d-flex align-items-center gap-3 min-w-0">
+            <div class="p-3 rounded-circle bg-success bg-opacity-10 text-success flex-shrink-0">
+                <i class="bi bi-person-bounding-box fs-2"></i>
+            </div>
+            <div class="min-w-0">
+                <div class="d-flex align-items-center gap-2 flex-wrap">
+                    <h5 class="fw-bold mb-0 text-dark">Biometric Self Camera Punch</h5>
+                    <span class="badge bg-success-subtle text-success border border-success-subtle">Camera Verified Only</span>
+                </div>
+                <p class="text-muted small mb-0 mt-1">
+                    Mark your daily attendance instantly with camera face verification. Step in front of your camera to record your punch.
+                </p>
+            </div>
+        </div>
+        <div class="flex-shrink-0">
+            <a href="{% url 'attendance:my_attendance' %}?punch=camera" class="btn btn-success px-4 py-2 fw-bold text-nowrap shadow-sm d-flex align-items-center gap-2">
+                <i class="bi bi-camera-video-fill"></i> Self Camera Punch &rarr;
+            </a>
+        </div>
+    </div>
+</div>
+{% endif %}
+
+{% if pending_leaves_count > 0 %}
+<div class="alert alert-warning border-start border-warning border-4 shadow-sm d-flex flex-column flex-sm-row justify-content-between align-items-start align-items-sm-center gap-2 mb-4">
+    <div class="d-flex align-items-center gap-2">
+        <i class="bi bi-exclamation-circle-fill fs-5 text-warning"></i>
+        <span>You have <strong>{{ pending_leaves_count }}</strong> pending leave request(s) waiting for approval.</span>
+    </div>
+    <a href="{% url 'leaves:list' %}?status=pending" class="btn btn-warning btn-sm fw-bold">
+        Review Requests &rarr;
+    </a>
+</div>
+{% endif %}
+
+<!-- Metrics Cards -->
+<div class="row g-3 mb-4">
+    <!-- Total Users -->
+    <div class="col-sm-6 col-xl-3">
+        <div class="card card-stat p-3">
+            <div class="d-flex justify-content-between align-items-center">
+                <div>
+                    <span class="text-muted small text-uppercase fw-bold">Total Accounts</span>
+                    <h3 class="fw-bold text-dark mt-1 mb-0">{{ total_users }}</h3>
+                    <span class="text-success small fw-semibold">
+                        <i class="bi bi-check-circle me-1"></i>{{ active_users_count }} Active
+                    </span>
+                </div>
+                <div class="stat-icon primary">
+                    <i class="bi bi-people-fill"></i>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- HR Administrators -->
+    <div class="col-sm-6 col-xl-3">
+        <div class="card card-stat p-3">
+            <div class="d-flex justify-content-between align-items-center">
+                <div>
+                    <span class="text-muted small text-uppercase fw-bold">HR Administrators</span>
+                    <h3 class="fw-bold text-dark mt-1 mb-0">{{ hr_admins_count }}</h3>
+                    <span class="text-muted small">System Operations</span>
+                </div>
+                <div class="stat-icon info">
+                    <i class="bi bi-person-gear"></i>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Managers -->
+    <div class="col-sm-6 col-xl-3">
+        <div class="card card-stat p-3">
+            <div class="d-flex justify-content-between align-items-center">
+                <div>
+                    <span class="text-muted small text-uppercase fw-bold">Managers</span>
+                    <h3 class="fw-bold text-dark mt-1 mb-0">{{ managers_count }}</h3>
+                    <span class="text-muted small">Team Approvals</span>
+                </div>
+                <div class="stat-icon warning">
+                    <i class="bi bi-briefcase-fill"></i>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Employees -->
+    <div class="col-sm-6 col-xl-3">
+        <div class="card card-stat p-3">
+            <div class="d-flex justify-content-between align-items-center">
+                <div>
+                    <span class="text-muted small text-uppercase fw-bold">Employees</span>
+                    <h3 class="fw-bold text-dark mt-1 mb-0">{{ employees_count }}</h3>
+                    <span class="text-success small">Face Attendance Users</span>
+                </div>
+                <div class="stat-icon success">
+                    <i class="bi bi-person-badge-fill"></i>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Live Attendance Metrics (Phase 4) -->
+<div class="row g-3 mb-4">
+    <div class="col-sm-6 col-xl-3">
+        <div class="card card-stat p-3 border-start border-success border-4">
+            <div class="d-flex justify-content-between align-items-center">
+                <div>
+                    <span class="text-muted small text-uppercase fw-bold">Present Today</span>
+                    <h3 class="fw-bold text-success mt-1 mb-0">{{ today_present_count }}</h3>
+                    <a href="{% url 'attendance:list' %}?status=present" class="text-decoration-none small text-muted">View roster &rarr;</a>
+                </div>
+                <div class="stat-icon success">
+                    <i class="bi bi-calendar-check-fill"></i>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="col-sm-6 col-xl-3">
+        <div class="card card-stat p-3 border-start border-warning border-4">
+            <div class="d-flex justify-content-between align-items-center">
+                <div>
+                    <span class="text-muted small text-uppercase fw-bold">Late Arrivals</span>
+                    <h3 class="fw-bold text-warning mt-1 mb-0">{{ today_late_count }}</h3>
+                    <span class="text-muted small">Exceeded grace</span>
+                </div>
+                <div class="stat-icon warning">
+                    <i class="bi bi-clock-history"></i>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="col-sm-6 col-xl-3">
+        <div class="card card-stat p-3 border-start border-info border-4">
+            <div class="d-flex justify-content-between align-items-center">
+                <div>
+                    <span class="text-muted small text-uppercase fw-bold">Currently Working</span>
+                    <h3 class="fw-bold text-info mt-1 mb-0">{{ today_clocked_in }}</h3>
+                    <span class="text-muted small">Active on shift</span>
+                </div>
+                <div class="stat-icon info">
+                    <i class="bi bi-person-walking"></i>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="col-sm-6 col-xl-3">
+        <div class="card card-stat p-3 border-start border-danger border-4">
+            <div class="d-flex justify-content-between align-items-center">
+                <div>
+                    <span class="text-muted small text-uppercase fw-bold">Absent Today</span>
+                    <h3 class="fw-bold text-danger mt-1 mb-0">{{ today_absent_count }}</h3>
+                    <a href="{% url 'attendance:list' %}?status=absent" class="text-decoration-none small text-muted">View absentees &rarr;</a>
+                </div>
+                <div class="stat-icon danger">
+                    <i class="bi bi-calendar-x-fill"></i>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Charts Section -->
+<div class="row g-4 mb-4">
+    <!-- User Roles Chart -->
+    <div class="col-lg-5">
+        <div class="card card-stat p-4 h-100">
+            <div class="d-flex justify-content-between align-items-center mb-3">
+                <h6 class="fw-bold text-dark mb-0">
+                    <i class="bi bi-pie-chart-fill text-primary me-2"></i> User Role Breakdown
+                </h6>
+                <span class="badge bg-light text-dark border">RBAC</span>
+            </div>
+            <div class="d-flex justify-content-center align-items-center" style="min-height: 240px;">
+                <canvas id="roleDistributionChart" style="max-height: 230px;"></canvas>
+            </div>
+            <div class="d-flex flex-wrap justify-content-around text-center gap-2 pt-3 border-top mt-3">
+                <div>
+                    <div class="fw-bold text-danger">{{ super_admins_count }}</div>
+                    <div class="text-muted" style="font-size: 0.75rem;">Super Admin</div>
+                </div>
+                <div>
+                    <div class="fw-bold text-primary">{{ hr_admins_count }}</div>
+                    <div class="text-muted" style="font-size: 0.75rem;">HR Admin</div>
+                </div>
+                <div>
+                    <div class="fw-bold text-info">{{ managers_count }}</div>
+                    <div class="text-muted" style="font-size: 0.75rem;">Manager</div>
+                </div>
+                <div>
+                    <div class="fw-bold text-success">{{ employees_count }}</div>
+                    <div class="text-muted" style="font-size: 0.75rem;">Employee</div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Attendance Trends Preview -->
+    <div class="col-lg-7">
+        <div class="card card-stat p-4 h-100">
+            <div class="d-flex justify-content-between align-items-center mb-3">
+                <div>
+                    <h6 class="fw-bold text-dark mb-0">
+                        <i class="bi bi-bar-chart-line-fill text-success me-2"></i> Weekly Attendance Trends
+                    </h6>
+                    <small class="text-muted">Interactive preview (will connect directly to live attendance in Phase 4)</small>
+                </div>
+                <span class="badge bg-light text-muted border">Simulation Preview</span>
+            </div>
+            <div style="min-height: 240px;">
+                <canvas id="attendanceTrendsChart" style="max-height: 240px;"></canvas>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Bottom Section: Recent Users & Roadmap -->
+<div class="row g-4 mb-4">
+    <!-- Recent System Accounts -->
+    <div class="col-lg-7">
+        <div class="card card-stat p-4 h-100">
+            <div class="d-flex justify-content-between align-items-center mb-3">
+                <h6 class="fw-bold text-dark mb-0">
+                    <i class="bi bi-people me-2 text-primary"></i> System User Directory
+                </h6>
+                <span class="badge bg-light text-dark border">{{ recent_users|length }} Accounts</span>
+            </div>
+            <div class="table-responsive">
+                <table class="table table-hover align-middle mb-0">
+                    <thead class="table-light small text-uppercase text-muted">
+                        <tr>
+                            <th>User</th>
+                            <th>Role</th>
+                            <th>Status</th>
+                            <th>Joined</th>
+                        </tr>
+                    </thead>
+                    <tbody class="small">
+                        {% for u in recent_users %}
+                        <tr>
+                            <td>
+                                <div class="d-flex align-items-center gap-2">
+                                    {% if u.avatar %}
+                                        <img src="{{ u.avatar.url }}" alt="{{ u.get_display_name }}" class="avatar-circle" style="width: 32px; height: 32px;">
+                                    {% else %}
+                                        <span class="avatar-circle" style="width: 32px; height: 32px; font-size: 0.8rem;">{{ u.username|make_list|first|upper }}</span>
+                                    {% endif %}
+                                    <div>
+                                        <div class="fw-bold text-dark">{{ u.get_display_name }}</div>
+                                        <div class="text-muted" style="font-size: 0.75rem;">@{{ u.username }}</div>
+                                    </div>
+                                </div>
+                            </td>
+                            <td>
+                                <span class="badge {{ u.get_role_badge_class }}">{{ u.get_role_display }}</span>
+                            </td>
+                            <td>
+                                {% if u.is_active %}
+                                    <span class="badge bg-success-subtle text-success border border-success-subtle">Active</span>
+                                {% else %}
+                                    <span class="badge bg-secondary">Inactive</span>
+                                {% endif %}
+                            </td>
+                            <td class="text-muted">{{ u.date_joined|date:"M d, Y" }}</td>
+                        </tr>
+                        {% empty %}
+                        <tr>
+                            <td colspan="4" class="text-center py-3 text-muted">No users found.</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <!-- Development Roadmap Status & System Info -->
+    <div class="col-lg-5">
+        <div class="card card-stat p-4 mb-4">
+            <h6 class="fw-bold text-dark mb-3">
+                <i class="bi bi-hdd-network text-info me-2"></i> Local Environment & Network
+            </h6>
+            <div class="small">
+                <div class="d-flex justify-content-between py-1 border-bottom">
+                    <span class="text-muted">Python Version:</span>
+                    <span class="fw-bold">{{ env_info.python_version }}</span>
+                </div>
+                <div class="d-flex justify-content-between py-1 border-bottom">
+                    <span class="text-muted">Django Version:</span>
+                    <span class="fw-bold">Django {{ env_info.django_version }}</span>
+                </div>
+                <div class="d-flex justify-content-between py-1 border-bottom">
+                    <span class="text-muted">Database Engine:</span>
+                    <span class="fw-bold">SQLite 3 (Local)</span>
+                </div>
+                <div class="d-flex justify-content-between py-1 border-bottom">
+                    <span class="text-muted">PC Local IP (Wi-Fi):</span>
+                    <span class="badge bg-primary">{{ env_info.local_ip }}</span>
+                </div>
+                <div class="d-flex justify-content-between py-1">
+                    <span class="text-muted">Camera IP Stream:</span>
+                    <span class="text-warning fw-semibold">Ready for Phase 5</span>
+                </div>
+            </div>
+            <div class="alert alert-info p-2 mt-3 mb-0 small">
+                <i class="bi bi-info-circle me-1"></i>
+                Your mobile phone on the same Wi-Fi can access this PC at <code>https://{{ env_info.local_ip }}:8000</code>.
+            </div>
+        </div>
+
+        <!-- Upcoming Holidays Card -->
+        <div class="card card-stat p-4 mb-4">
+            <div class="d-flex justify-content-between align-items-center mb-3">
+                <h6 class="fw-bold text-dark mb-0">
+                    <i class="bi bi-calendar2-heart text-danger me-2"></i> Upcoming Holidays
+                </h6>
+                <a href="{% url 'holidays:calendar' %}" class="small text-primary text-decoration-none">Calendar &rarr;</a>
+            </div>
+            <div class="list-group list-group-flush">
+                {% for h in upcoming_holidays %}
+                <div class="list-group-item px-0 py-2 border-bottom d-flex justify-content-between align-items-center">
+                    <div>
+                        <div class="fw-bold text-dark small">{{ h.name }}</div>
+                        <div class="text-muted" style="font-size: 0.75rem;">
+                            {{ h.date|date:"l, d F Y" }}
+                        </div>
+                    </div>
+                    <span class="badge {{ h.get_badge_class }}" style="font-size: 0.7rem;">
+                        {{ h.get_holiday_type_display }}
+                    </span>
+                </div>
+                {% empty %}
+                <div class="text-center py-3 text-muted small">
+                    No upcoming holidays scheduled.
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+
+        <div class="card card-stat p-4">
+            <div class="d-flex justify-content-between align-items-center mb-3">
+                <h6 class="fw-bold text-dark mb-0">
+                    <i class="bi bi-signpost-split text-primary me-2"></i> Project Roadmap
+                </h6>
+                <span class="badge bg-success">All Phases 1&ndash;11 Complete</span>
+            </div>
+            <div class="small">
+                <div class="roadmap-step active mb-2">
+                    <strong class="text-success"><i class="bi bi-check2-circle me-1"></i> Phases 1 &ndash; 3:</strong>
+                    <div class="text-muted">Auth, RBAC, Companies, Employees, Shifts, Overnight Windows.</div>
+                </div>
+                <div class="roadmap-step active mb-2">
+                    <strong class="text-success"><i class="bi bi-check2-circle me-1"></i> Phase 4:</strong>
+                    <div class="text-muted">Attendance Ledger, Punctuality Engine, Overtime, Self-Service Punches.</div>
+                </div>
+                <div class="roadmap-step active mb-2">
+                    <strong class="text-success"><i class="bi bi-check2-circle me-1"></i> Phase 5 & 6:</strong>
+                    <div class="text-muted">OpenCV LBPH Biometrics, Live Face Kiosk, Mobile Wi-Fi Camera.</div>
+                </div>
+                <div class="roadmap-step active mb-2">
+                    <strong class="text-success"><i class="bi bi-check2-circle me-1"></i> Phase 7:</strong>
+                    <div class="text-muted">Corporate Holiday Calendar, Grid View & Working Day Calculation.</div>
+                </div>
+                <div class="roadmap-step active mb-2">
+                    <strong class="text-success"><i class="bi bi-check2-circle me-1"></i> Phase 8 & 9:</strong>
+                    <div class="text-muted">Leave Management, Non-Working Day Auto-Exclusion, Approvals & Sync.</div>
+                </div>
+                <div class="roadmap-step active mb-2">
+                    <strong class="text-success"><i class="bi bi-check2-circle me-1"></i> Phase 10:</strong>
+                    <div class="text-muted">Payroll Engine (Actual / 26-Day Policy), LOP Deductions, Payslips.</div>
+                </div>
+                <div class="roadmap-step active mb-0">
+                    <strong class="text-success"><i class="bi bi-check2-circle me-1"></i> Phase 11:</strong>
+                    <div class="text-muted">Excel & CSV Exports (Attendance Muster, Payroll Ledger, Balances).</div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+{% if pending_leaves_count > 0 %}
+<div class="alert alert-warning border-start border-warning border-4 shadow-sm d-flex flex-column flex-sm-row justify-content-between align-items-start align-items-sm-center gap-2 mb-4">
+    <div class="d-flex align-items-center gap-2">
+        <i class="bi bi-exclamation-circle-fill fs-5 text-warning"></i>
+        <span>You have <strong>{{ pending_leaves_count }}</strong> pending leave request(s) waiting for approval.</span>
+    </div>
+    <a href="{% url 'leaves:list' %}?status=pending" class="btn btn-warning btn-sm fw-bold">
+        Review Requests &rarr;
+    </a>
+</div>
+{% endif %}
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    // 1. Role Distribution Doughnut Chart
+    const roleLabels = {{ role_chart_labels|safe }};
+    const roleData = {{ role_chart_data|safe }};
+
+    const ctxRole = document.getElementById('roleDistributionChart').getContext('2d');
+    new Chart(ctxRole, {
+        type: 'doughnut',
+        data: {
+            labels: roleLabels,
+            datasets: [{
+                data: roleData,
+                backgroundColor: [
+                    '#dc2626', // Super Admin (Red)
+                    '#4361ee', // HR Admin (Blue)
+                    '#06b6d4', // Manager (Cyan)
+                    '#16a34a', // Employee (Green)
+                ],
+                borderWidth: 2,
+                borderColor: '#ffffff',
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+                legend: {
+                    position: 'bottom',
+                    labels: {
+                        boxWidth: 12,
+                        padding: 12,
+                        font: { size: 11 }
+                    }
+                }
+            },
+            cutout: '68%'
+        }
+    });
+
+    // 2. Attendance Trends Bar Chart
+    const attendanceLabels = {{ attendance_trends_labels|safe }};
+    const presentData = {{ attendance_trends_present|safe }};
+    const absentData = {{ attendance_trends_absent|safe }};
+    const lateData = {{ attendance_trends_late|safe }};
+
+    const ctxAttendance = document.getElementById('attendanceTrendsChart').getContext('2d');
+    new Chart(ctxAttendance, {
+        type: 'bar',
+        data: {
+            labels: attendanceLabels,
+            datasets: [
+                {
+                    label: 'Present',
+                    data: presentData,
+                    backgroundColor: '#16a34a',
+                    borderRadius: 4,
+                },
+                {
+                    label: 'Late',
+                    data: lateData,
+                    backgroundColor: '#d97706',
+                    borderRadius: 4,
+                },
+                {
+                    label: 'Absent',
+                    data: absentData,
+                    backgroundColor: '#dc2626',
+                    borderRadius: 4,
+                }
+            ]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+                legend: {
+                    position: 'top',
+                    labels: { boxWidth: 12, font: { size: 11 } }
+                }
+            },
+            scales: {
+                x: { grid: { display: false } },
+                y: {
+                    beginAtZero: true,
+                    ticks: { precision: 0 }
+                }
+            }
+        }
+    });
+</script>
+{% endblock %}

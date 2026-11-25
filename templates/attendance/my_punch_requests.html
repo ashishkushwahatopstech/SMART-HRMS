@@ -1,0 +1,120 @@
+{% extends 'base.html' %}
+
+{% block title %}My Missed Punch Requests &mdash; Smart HRMS{% endblock %}
+{% block page_title %}My Regularization Requests{% endblock %}
+
+{% block content %}
+<div class="d-flex flex-column flex-sm-row justify-content-between align-items-start align-items-sm-center gap-3 mb-4">
+    <div>
+        <h4 class="fw-bold mb-1 text-dark">
+            <i class="bi bi-card-checklist text-primary me-2"></i> My Missed Punch Requests
+        </h4>
+        <p class="text-muted small mb-0">Track status and management review of your past attendance regularization requests</p>
+    </div>
+    <div class="d-flex flex-wrap gap-2">
+        <a href="{% url 'attendance:my_attendance' %}" class="btn btn-outline-secondary btn-sm shadow-sm">
+            <i class="bi bi-calendar-event me-1"></i> My Attendance
+        </a>
+        <a href="{% url 'attendance:request_create' %}" class="btn btn-primary btn-sm shadow-sm">
+            <i class="bi bi-plus-circle me-1"></i> Request Missed Punch
+        </a>
+    </div>
+</div>
+
+<div class="card card-stat overflow-hidden shadow-sm border-0">
+    <div class="table-responsive">
+        <table class="table table-hover table-compact align-middle mb-0">
+            <thead class="table-light">
+                <tr>
+                    <th scope="col" style="min-width: 140px;">Missed Date & Scope</th>
+                    <th scope="col" style="min-width: 150px;">Claimed Timings</th>
+                    <th scope="col" style="min-width: 220px;">Reason Submitted</th>
+                    <th scope="col" style="min-width: 100px;">Status</th>
+                    <th scope="col" style="min-width: 180px;">Review Outcome</th>
+                    <th scope="col" class="text-end" style="min-width: 130px;">Submitted On</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for req in page_obj %}
+                <tr>
+                    <td>
+                        <div class="fw-bold text-dark lh-sm" style="font-size: 0.85rem;">{{ req.date|date:"d M Y" }}</div>
+                        <div class="d-flex align-items-center gap-1 mt-1">
+                            <span class="text-muted" style="font-size: 0.72rem;">{{ req.date|date:"D" }}</span>
+                            <span class="badge bg-light text-dark border px-1 py-0" style="font-size: 0.68rem;">{{ req.get_punch_type_display }}</span>
+                        </div>
+                    </td>
+                    <td>
+                        <div class="d-flex flex-column gap-1" style="font-size: 0.78rem;">
+                            {% if req.check_in_time %}
+                                <div class="text-success"><i class="bi bi-box-arrow-in-right me-1"></i>In: {{ req.check_in_time|time:"h:i A" }}</div>
+                            {% endif %}
+                            {% if req.check_out_time %}
+                                <div class="text-primary"><i class="bi bi-box-arrow-right me-1"></i>Out: {{ req.check_out_time|time:"h:i A" }}</div>
+                            {% endif %}
+                        </div>
+                    </td>
+                    <td style="max-width: 260px;">
+                        <div class="small text-truncate text-dark" title="{{ req.reason }}">{{ req.reason }}</div>
+                    </td>
+                    <td>
+                        <span class="badge {{ req.get_status_badge_class }}" style="font-size: 0.72rem;">
+                            {{ req.get_status_display }}
+                        </span>
+                    </td>
+                    <td>
+                        {% if req.reviewed_by %}
+                            <div class="small fw-semibold text-dark">{{ req.reviewed_by.get_display_name }}</div>
+                            <div class="text-muted" style="font-size: 0.7rem;">{{ req.reviewed_at|date:"d M Y, H:i" }}</div>
+                            {% if req.review_remarks %}
+                                <div class="small text-muted text-truncate mt-1" style="max-width: 180px; font-style: italic;" title="{{ req.review_remarks }}">
+                                    "{{ req.review_remarks }}"
+                                </div>
+                            {% endif %}
+                        {% else %}
+                            <span class="badge bg-warning-subtle text-warning border border-warning-subtle" style="font-size: 0.68rem;">Pending Review</span>
+                        {% endif %}
+                    </td>
+                    <td class="text-end text-muted small">
+                        {{ req.created_at|date:"d M Y, H:i" }}
+                    </td>
+                </tr>
+                {% empty %}
+                <tr>
+                    <td colspan="6" class="text-center py-5">
+                        <i class="bi bi-inbox fs-1 text-muted d-block mb-2"></i>
+                        <h6 class="text-dark fw-bold">No Missed Punch Requests</h6>
+                        <p class="text-muted small mb-3">You have not submitted any attendance regularization requests yet.</p>
+                        <a href="{% url 'attendance:request_create' %}" class="btn btn-outline-primary btn-sm">
+                            <i class="bi bi-plus-circle me-1"></i> Request Missed Punch
+                        </a>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+
+{% if page_obj.has_other_pages %}
+<div class="d-flex flex-column flex-sm-row justify-content-between align-items-center gap-2 mt-3">
+    <div class="text-muted small">
+        Showing {{ page_obj.start_index }} to {{ page_obj.end_index }} of {{ page_obj.paginator.count }} requests
+    </div>
+    <ul class="pagination pagination-sm mb-0">
+        {% if page_obj.has_previous %}
+            <li class="page-item"><a class="page-link" href="?page={{ page_obj.previous_page_number }}">Previous</a></li>
+        {% endif %}
+        {% for num in page_obj.paginator.page_range %}
+            <li class="page-item {% if page_obj.number == num %}active{% endif %}">
+                <a class="page-link" href="?page={{ num }}">{{ num }}</a>
+            </li>
+        {% endfor %}
+        {% if page_obj.has_next %}
+            <li class="page-item"><a class="page-link" href="?page={{ page_obj.next_page_number }}">Next</a></li>
+        {% endif %}
+    </ul>
+</div>
+{% endif %}
+
+{% endblock %}

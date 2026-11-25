@@ -1,0 +1,890 @@
+{% extends 'base.html' %}
+
+{% block title %}My Attendance &mdash; Smart HRMS{% endblock %}
+{% block page_title %}Self Service Attendance{% endblock %}
+
+{% block content %}
+<div class="d-flex flex-column flex-sm-row justify-content-between align-items-start align-items-sm-center gap-3 mb-4">
+    <div>
+        <h4 class="fw-bold mb-1 text-dark">
+            <i class="bi bi-calendar-event text-primary me-2"></i> Self Service Attendance
+        </h4>
+        <p class="text-muted small mb-0">Record your daily biometric attendance and manage attendance regularizations</p>
+    </div>
+    <div class="d-flex flex-wrap gap-2">
+        {% if request.user.role in 'super_admin,hr_admin,manager' %}
+        <a href="{% url 'attendance:face_kiosk' %}" class="btn btn-danger btn-sm fw-bold shadow-sm d-flex align-items-center gap-1">
+            <i class="bi bi-camera-video-fill"></i> Face Cam Attendance
+        </a>
+        {% endif %}
+        <a href="{% url 'attendance:request_create' %}" class="btn btn-outline-warning btn-sm shadow-sm">
+            <i class="bi bi-clock-history me-1"></i> Request Missed Punch
+        </a>
+        <a href="{% url 'attendance:my_requests' %}" class="btn btn-outline-secondary btn-sm shadow-sm">
+            <i class="bi bi-card-checklist me-1"></i> My Requests
+        </a>
+    </div>
+</div>
+
+<div class="row g-4 mb-4">
+    <!-- Today's Punch Widget -->
+    <div class="col-lg-5">
+        <div class="card card-stat p-4 h-100">
+            <div class="d-flex justify-content-between align-items-center mb-3">
+                <h5 class="fw-bold mb-0 text-dark">
+                    <i class="bi bi-clock-history text-primary me-2"></i> Today's Punch Card
+                </h5>
+                <span class="badge bg-light text-dark border">{{ today|date:"l, d M Y" }}</span>
+            </div>
+
+            <!-- Current Schedule Banner -->
+            <div class="p-3 bg-light rounded-3 border mb-3">
+                <div class="d-flex justify-content-between align-items-center">
+                    <div>
+                        <span class="text-muted small">Assigned Schedule</span>
+                        <div class="fw-bold text-dark">{{ employee.assigned_shift.name|default:"General Shift" }}</div>
+                    </div>
+                    <div class="text-end">
+                        <span class="badge bg-primary-subtle text-primary font-monospace">
+                            {{ employee.assigned_shift.start_time|time:"h:i A" }} &ndash; {{ employee.assigned_shift.end_time|time:"h:i A" }}
+                        </span>
+                        <div class="text-muted small mt-1">Grace: {{ employee.assigned_shift.grace_period_minutes|default:15 }} mins</div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Punch In / Out Status -->
+            <div class="row g-2 text-center mb-4">
+                <div class="col-6">
+                    <div class="p-3 border rounded-3 bg-white">
+                        <div class="text-muted small mb-1">Check-In</div>
+                        {% if today_attendance and today_attendance.check_in_time %}
+                            <div class="fs-5 fw-bold text-success">{{ today_attendance.check_in_time|date:"h:i A" }}</div>
+                            {% if today_attendance.is_late %}
+                                <span class="badge bg-warning text-dark mt-1">Late ({{ today_attendance.late_minutes }}m)</span>
+                            {% else %}
+                                <span class="badge bg-success-subtle text-success mt-1">On Time</span>
+                            {% endif %}
+                        {% else %}
+                            <div class="fs-5 fw-bold text-muted">&mdash;</div>
+                            <span class="badge bg-light text-muted border mt-1">Pending</span>
+                        {% endif %}
+                    </div>
+                </div>
+                <div class="col-6">
+                    <div class="p-3 border rounded-3 bg-white">
+                        <div class="text-muted small mb-1">Check-Out</div>
+                        {% if today_attendance and today_attendance.check_out_time %}
+                            <div class="fs-5 fw-bold text-primary">{{ today_attendance.check_out_time|date:"h:i A" }}</div>
+                            <span class="badge bg-primary-subtle text-primary mt-1">{{ today_attendance.total_working_hours }}h Total</span>
+                        {% else %}
+                            <div class="fs-5 fw-bold text-muted">&mdash;</div>
+                            <span class="badge bg-light text-muted border mt-1">
+                                {% if today_attendance %}In Progress{% else %}Not In Yet{% endif %}
+                            </span>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+
+            <!-- Biometric Self Punch Section (Accessible via Camera Only) -->
+            <div class="mt-auto">
+                {% if not has_face_enrolled %}
+                    <!-- Face Biometric Not Enrolled Warning -->
+                    <div class="alert alert-warning border border-warning-subtle rounded-3 p-3 text-center mb-3">
+                        <i class="bi bi-person-bounding-box text-warning fs-3 d-block mb-1"></i>
+                        <div class="fw-bold text-dark small">Biometric Face Not Enrolled</div>
+                        <p class="small text-muted mb-2">Self punch is restricted to camera face verification. Your face has not been enrolled yet in the biometric system.</p>
+                        <span class="badge bg-warning text-dark px-2 py-1">Please contact HR or your Manager to enroll your face</span>
+                    </div>
+                {% elif not today_attendance %}
+                    <!-- Punch Check-In Button -->
+                    <button type="button" class="btn btn-success btn-lg w-100 shadow-sm py-2 fw-bold d-flex align-items-center justify-content-center gap-2" id="btnOpenSelfPunchModal" data-punch-mode="check_in">
+                        <i class="bi bi-camera-video-fill fs-5"></i>
+                        <span>Punch Check-In (Camera Verify)</span>
+                    </button>
+                    <div class="text-center text-muted small mt-2">
+                        <i class="bi bi-shield-check text-success me-1"></i> Biometric Camera Verification Only
+                    </div>
+                {% elif not today_attendance.check_out_time %}
+                    <!-- Punch Check-Out Button -->
+                    <button type="button" class="btn btn-danger btn-lg w-100 shadow-sm py-2 fw-bold d-flex align-items-center justify-content-center gap-2" id="btnOpenSelfPunchModal" data-punch-mode="check_out">
+                        <i class="bi bi-camera-video-fill fs-5"></i>
+                        <span>Punch Check-Out (Camera Verify)</span>
+                    </button>
+                    <div class="text-center text-muted small mt-2">
+                        <i class="bi bi-clock-history text-primary me-1"></i> Checked in at {{ today_attendance.check_in_time|date:"h:i A" }} &bull; Camera Punch Out
+                    </div>
+                {% else %}
+                    <!-- Punch Completed -->
+                    <button type="button" class="btn btn-outline-secondary btn-lg w-100 py-2 fw-semibold" disabled>
+                        <i class="bi bi-check-circle-fill text-success me-2"></i> Punches Complete For Today
+                    </button>
+                    <div class="text-center text-muted small mt-2">
+                        <i class="bi bi-check2-all text-success me-1"></i> Total working duration: {{ today_attendance.total_working_hours }} hrs.
+                    </div>
+                {% endif %}
+
+                {% if can_manual_punch %}
+                <!-- HR / Manager Quick Link to Universal Terminal -->
+                <div class="text-center mt-3 pt-2 border-top">
+                    <a href="{% url 'attendance:face_kiosk' %}" class="small text-danger text-decoration-none fw-bold">
+                        <i class="bi bi-camera-video-fill me-1"></i> Open Universal Company Terminal &rarr;
+                    </a>
+                </div>
+                {% endif %}
+
+                <!-- Missed Punch Regularization Prompt -->
+                <div class="pt-3 border-top mt-3 text-center">
+                    <span class="text-muted small d-block mb-2">Forgot to punch on a previous day?</span>
+                    <a href="{% url 'attendance:request_create' %}" class="btn btn-outline-warning btn-sm w-100">
+                        <i class="bi bi-clock-history me-1"></i> Request Missed Punch Regularization
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Monthly Summary Statistics -->
+    <div class="col-lg-7">
+        <div class="card card-stat p-4 h-100">
+            <div class="d-flex justify-content-between align-items-center mb-3">
+                <h5 class="fw-bold mb-0 text-dark">
+                    <i class="bi bi-bar-chart-line text-primary me-2"></i> Monthly Overview
+                </h5>
+                <form method="get" class="d-flex align-items-center gap-2">
+                    <input type="month" name="month" value="{{ selected_month }}" class="form-control form-control-sm" onchange="this.form.submit()">
+                </form>
+            </div>
+
+            <!-- Metric Cards -->
+            <div class="row g-3 mb-4">
+                <div class="col-sm-4">
+                    <div class="p-3 bg-light rounded-3 text-center border">
+                        <div class="text-muted small">Days Present</div>
+                        <div class="fs-3 fw-bold text-success mt-1">{{ stats.present_days|default:0 }}</div>
+                        <div class="text-muted" style="font-size: 0.75rem;">Full Day Attendances</div>
+                    </div>
+                </div>
+                <div class="col-sm-4">
+                    <div class="p-3 bg-light rounded-3 text-center border">
+                        <div class="text-muted small">Late Arrivals</div>
+                        <div class="fs-3 fw-bold text-warning mt-1">{{ stats.late_days|default:0 }}</div>
+                        <div class="text-muted" style="font-size: 0.75rem;">Exceeded Grace Period</div>
+                    </div>
+                </div>
+                <div class="col-sm-4">
+                    <div class="p-3 bg-light rounded-3 text-center border">
+                        <div class="text-muted small">Overtime Earned</div>
+                        <div class="fs-3 fw-bold text-primary mt-1">{{ stats.overtime_hours|default:"0.00" }}h</div>
+                        <div class="text-muted" style="font-size: 0.75rem;">Beyond Shift Hours</div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="alert alert-info py-2 px-3 small d-flex align-items-center mb-0">
+                <i class="bi bi-info-circle-fill me-2 fs-5"></i>
+                <div>
+                    Total Work Hours Logged: <strong>{{ stats.working_hours|default:"0.00" }} hrs</strong> across <strong>{{ stats.total_days|default:0 }} registered days</strong> this calendar period.
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Personal Attendance Log History Table -->
+<div class="card card-stat overflow-hidden shadow-sm border-0 mb-4">
+    <div class="card-header bg-white py-3 px-4 d-flex justify-content-between align-items-center border-bottom">
+        <h6 class="fw-bold mb-0 text-dark">
+            <i class="bi bi-calendar-check me-2 text-primary"></i> Attendance History ({{ selected_month }})
+        </h6>
+        <span class="badge bg-light text-muted border font-monospace">{{ stats.total_days|default:0 }} Records</span>
+    </div>
+    <div class="table-responsive">
+        <table class="table table-hover table-compact align-middle mb-0">
+            <thead class="table-light">
+                <tr>
+                    <th scope="col" style="min-width: 140px;">Date & Shift</th>
+                    <th scope="col" style="min-width: 160px;">Punch In & Out</th>
+                    <th scope="col" style="min-width: 120px;">Work Duration</th>
+                    <th scope="col" style="min-width: 140px;">Status & Punctuality</th>
+                    <th scope="col" class="text-end sticky-action-col" style="min-width: 80px;">Details</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for att in page_obj %}
+                <tr>
+                    <td>
+                        <div class="fw-semibold text-dark lh-sm" style="font-size: 0.85rem;">{{ att.date|date:"d M Y" }}</div>
+                        <div class="d-flex align-items-center gap-1 mt-1 flex-wrap">
+                            <span class="text-muted" style="font-size: 0.72rem;">{{ att.date|date:"D" }}</span>
+                            {% if att.shift %}
+                                <span class="badge bg-light text-secondary border font-monospace px-1 py-0" style="font-size: 0.68rem;" title="{{ att.shift.name }}: {{ att.shift.start_time|time:'H:i' }} - {{ att.shift.end_time|time:'H:i' }}">
+                                    {{ att.shift.name|truncatechars:10 }} ({{ att.shift.start_time|time:"H:i" }}&ndash;{{ att.shift.end_time|time:"H:i" }})
+                                </span>
+                            {% else %}
+                                <span class="badge bg-light text-muted border px-1 py-0" style="font-size: 0.68rem;">General Shift</span>
+                            {% endif %}
+                        </div>
+                    </td>
+                    <td>
+                        <!-- Side-by-Side Punch In & Out -->
+                        <div class="d-inline-flex align-items-center gap-1 flex-nowrap" style="font-size: 0.78rem;">
+                            <!-- Punch In with time -->
+                            {% if att.check_in_time %}
+                                <span class="badge bg-success-subtle text-success border border-success-subtle font-monospace px-2 py-1" title="Punch In: {{ att.check_in_time|date:'h:i A' }} ({{ att.get_verification_method_display }})">
+                                    <i class="bi bi-box-arrow-in-right me-1"></i>{{ att.check_in_time|date:"h:i A" }}
+                                </span>
+                            {% else %}
+                                <span class="badge bg-light text-muted border border-dashed font-monospace px-2 py-1">&mdash;&mdash;</span>
+                            {% endif %}
+
+                            <!-- Punch Out: Blank dashed placeholder until punch out occurs -->
+                            {% if att.check_out_time %}
+                                <span class="badge bg-primary-subtle text-primary border border-primary-subtle font-monospace px-2 py-1" title="Punch Out: {{ att.check_out_time|date:'h:i A' }}">
+                                    <i class="bi bi-box-arrow-right me-1"></i>{{ att.check_out_time|date:"h:i A" }}
+                                </span>
+                            {% else %}
+                                <span class="badge bg-light text-muted border border-dashed font-monospace px-2 py-1" style="min-width: 65px; text-align: center;" title="Punch Out Pending">&mdash;&mdash;</span>
+                            {% endif %}
+                        </div>
+                    </td>
+                    <td>
+                        <div class="fw-bold text-dark" style="font-size: 0.85rem;">{{ att.total_working_hours }} hrs</div>
+                        {% if att.overtime_hours > 0 %}
+                            <span class="badge bg-success-subtle text-success border border-success-subtle mt-1" style="font-size: 0.68rem;">
+                                +{{ att.overtime_hours }}h OT
+                            </span>
+                        {% else %}
+                            <span class="text-muted" style="font-size: 0.7rem;">0 OT</span>
+                        {% endif %}
+                    </td>
+                    <td>
+                        <span class="badge {{ att.get_status_badge_class }} d-inline-block mb-1" style="font-size: 0.72rem;">
+                            {{ att.get_status_display }}
+                        </span>
+                        <div>
+                            {% if att.is_late %}
+                                <span class="badge bg-warning-subtle text-dark border border-warning-subtle" style="font-size: 0.66rem;" title="{{ att.late_minutes }}m late">
+                                    Late {{ att.late_minutes }}m
+                                </span>
+                            {% elif att.check_in_time %}
+                                <span class="badge bg-success-subtle text-success border border-success-subtle" style="font-size: 0.66rem;">On Time</span>
+                            {% endif %}
+                            {% if att.is_early_departure %}
+                                <span class="badge bg-danger-subtle text-danger border border-danger-subtle" style="font-size: 0.66rem;" title="{{ att.early_departure_minutes }}m early departure">
+                                    Early -{{ att.early_departure_minutes }}m
+                                </span>
+                            {% endif %}
+                        </div>
+                    </td>
+                    <td class="text-end sticky-action-col">
+                        <a href="{% url 'attendance:detail' att.pk %}" class="btn btn-outline-primary btn-sm px-2 py-1" title="View Audit Breakdown">
+                            <i class="bi bi-eye"></i>
+                        </a>
+                    </td>
+                </tr>
+                {% empty %}
+                <tr>
+                    <td colspan="5" class="text-center py-4 text-muted">
+                        <div class="text-muted mb-2"><i class="bi bi-calendar-x fs-2"></i></div>
+                        <div class="fw-semibold">No attendance records logged for {{ selected_month }}.</div>
+                        <div class="small text-muted mt-1">Use the month filter above to select past months or mark your punch via the Camera.</div>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% if page_obj.has_other_pages %}
+    <div class="card-footer bg-white py-2 px-3 border-top d-flex justify-content-between align-items-center">
+        <div class="text-muted small">
+            Showing {{ page_obj.start_index }} to {{ page_obj.end_index }} of {{ page_obj.paginator.count }} entries
+        </div>
+        <ul class="pagination pagination-sm mb-0">
+            {% if page_obj.has_previous %}
+                <li class="page-item"><a class="page-link" href="?page={{ page_obj.previous_page_number }}&month={{ selected_month }}">Previous</a></li>
+            {% else %}
+                <li class="page-item disabled"><span class="page-link">Previous</span></li>
+            {% endif %}
+            {% for num in page_obj.paginator.page_range %}
+                {% if page_obj.number == num %}
+                    <li class="page-item active"><span class="page-link">{{ num }}</span></li>
+                {% elif num > page_obj.number|add:'-3' and num < page_obj.number|add:'3' %}
+                    <li class="page-item"><a class="page-link" href="?page={{ num }}&month={{ selected_month }}">{{ num }}</a></li>
+                {% endif %}
+            {% endfor %}
+            {% if page_obj.has_next %}
+                <li class="page-item"><a class="page-link" href="?page={{ page_obj.next_page_number }}&month={{ selected_month }}">Next</a></li>
+            {% else %}
+                <li class="page-item disabled"><span class="page-link">Next</span></li>
+            {% endif %}
+        </ul>
+    </div>
+    {% endif %}
+</div>
+
+<!-- Recent Missed Punch Regularization Requests -->
+<div class="card card-stat overflow-hidden shadow-sm border-0">
+    <div class="card-header bg-white py-3 px-4 d-flex justify-content-between align-items-center border-bottom">
+        <div>
+            <h6 class="fw-bold mb-0 text-dark">
+                <i class="bi bi-clock-history text-warning me-2"></i> Missed Punch Regularization Requests
+            </h6>
+            <span class="text-muted small">Recent manual punch requests submitted for management review</span>
+        </div>
+        <div class="d-flex gap-2">
+            <a href="{% url 'attendance:request_create' %}" class="btn btn-primary btn-sm shadow-sm">
+                <i class="bi bi-plus-circle me-1"></i> New Request
+            </a>
+            <a href="{% url 'attendance:my_requests' %}" class="btn btn-outline-secondary btn-sm shadow-sm">
+                View All
+            </a>
+        </div>
+    </div>
+    <div class="table-responsive">
+        <table class="table table-hover table-compact align-middle mb-0">
+            <thead class="table-light">
+                <tr>
+                    <th scope="col" style="min-width: 130px;">Missed Date & Type</th>
+                    <th scope="col" style="min-width: 140px;">Claimed Timings</th>
+                    <th scope="col" style="min-width: 180px;">Reason Submitted</th>
+                    <th scope="col" style="min-width: 110px;">Status</th>
+                    <th scope="col" style="min-width: 160px;">Review Details</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for req in recent_requests %}
+                <tr>
+                    <td>
+                        <div class="fw-bold text-dark lh-sm" style="font-size: 0.85rem;">{{ req.date|date:"d M Y" }}</div>
+                        <div class="d-flex align-items-center gap-1 mt-1">
+                            <span class="text-muted" style="font-size: 0.72rem;">{{ req.date|date:"D" }}</span>
+                            <span class="badge bg-light text-dark border px-1 py-0" style="font-size: 0.68rem;">{{ req.get_punch_type_display }}</span>
+                        </div>
+                    </td>
+                    <td>
+                        <div class="d-flex flex-column gap-1" style="font-size: 0.78rem;">
+                            {% if req.check_in_time %}
+                                <div class="text-success"><i class="bi bi-box-arrow-in-right me-1"></i>In: {{ req.check_in_time|time:"h:i A" }}</div>
+                            {% endif %}
+                            {% if req.check_out_time %}
+                                <div class="text-primary"><i class="bi bi-box-arrow-right me-1"></i>Out: {{ req.check_out_time|time:"h:i A" }}</div>
+                            {% endif %}
+                        </div>
+                    </td>
+                    <td style="max-width: 220px;">
+                        <div class="small text-truncate text-dark" title="{{ req.reason }}">{{ req.reason }}</div>
+                    </td>
+                    <td>
+                        <span class="badge {{ req.get_status_badge_class }}" style="font-size: 0.72rem;">{{ req.get_status_display }}</span>
+                    </td>
+                    <td>
+                        {% if req.reviewed_by %}
+                            <div class="small fw-semibold text-dark">{{ req.reviewed_by.get_display_name }}</div>
+                            <div class="text-muted" style="font-size: 0.7rem;">{{ req.reviewed_at|date:"d M, H:i" }}</div>
+                            {% if req.review_remarks %}
+                                <div class="small text-muted text-truncate mt-1" style="max-width: 150px; font-style: italic;" title="{{ req.review_remarks }}">
+                                    "{{ req.review_remarks }}"
+                                </div>
+                            {% endif %}
+                        {% else %}
+                            <span class="badge bg-warning-subtle text-warning border border-warning-subtle" style="font-size: 0.68rem;">Pending Review</span>
+                        {% endif %}
+                    </td>
+                </tr>
+                {% empty %}
+                <tr>
+                    <td colspan="5" class="text-center py-4 text-muted small">
+                        <i class="bi bi-clock-history fs-3 d-block mb-1 text-muted"></i>
+                        No manual punch requests on record. If you missed a punch on a previous day, click "New Request".
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+
+<!-- Biometric Self Punch Camera Modal -->
+<div class="modal fade" id="selfPunchModal" tabindex="-1" aria-labelledby="selfPunchModalLabel" aria-hidden="true" data-bs-backdrop="static">
+    <div class="modal-dialog modal-dialog-centered modal-lg">
+        <div class="modal-content border-0 shadow-lg" style="border-radius: 16px; overflow: hidden;">
+            <!-- Modal Header -->
+            <div class="modal-header bg-dark text-white border-0 py-3 px-4">
+                <div class="d-flex align-items-center gap-2">
+                    <i class="bi bi-person-bounding-box text-success fs-4"></i>
+                    <div>
+                        <h5 class="modal-title fw-bold mb-0" id="selfPunchModalLabel">Biometric Self Punch Scanner</h5>
+                        <span class="small text-white-50">{{ employee.get_full_name }} &bull; ID: {{ employee.employee_id }}</span>
+                    </div>
+                </div>
+                <button type="button" class="btn-close btn-close-white" id="btnCloseSelfPunch" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+
+            <!-- Modal Body -->
+            <div class="modal-body p-0 bg-black position-relative">
+                <!-- Video & Overlay Viewport Container -->
+                <div id="selfCameraContainer" class="position-relative w-100 bg-dark" style="aspect-ratio: 4/3; max-height: 480px; overflow: hidden;">
+                    <video id="selfPunchVideo" autoplay playsinline muted style="width: 100%; height: 100%; object-fit: cover;"></video>
+                    <canvas id="selfPunchOverlay" style="position: absolute; top:0; left:0; width:100%; height:100%; pointer-events: none; z-index: 5;"></canvas>
+                    <canvas id="selfPunchCanvas" style="display: none;"></canvas>
+
+                    <!-- Top HUD Bar -->
+                    <div class="position-absolute top-0 start-0 w-100 p-3 d-flex justify-content-between align-items-center" style="z-index: 10;">
+                        <span class="badge bg-dark bg-opacity-75 border border-secondary text-white font-monospace px-2 py-1" id="selfHudMode">
+                            <i class="bi bi-camera-fill me-1"></i> FRONT CAMERA
+                        </span>
+                        <span class="badge bg-dark bg-opacity-75 border border-info text-info font-monospace px-2 py-1" id="selfLiveClock" style="font-size: 0.85rem;">
+                            --:--:--
+                        </span>
+                    </div>
+
+                    <!-- Scanning Reticle Line -->
+                    <div id="selfScannerLine" style="display: none; position: absolute; left: 0; right: 0; height: 3px; background: linear-gradient(90deg, transparent, #22c55e, #10b981, transparent); box-shadow: 0 0 14px #22c55e; z-index: 6; animation: selfScanAnim 2.2s ease-in-out infinite;"></div>
+
+                    <!-- Bottom HUD Bar -->
+                    <div class="position-absolute bottom-0 start-0 w-100 p-2 p-sm-3 d-flex justify-content-between align-items-center bg-dark bg-opacity-75 text-white small" style="z-index: 10;">
+                        <div class="d-flex align-items-center text-truncate">
+                            <span class="badge bg-success font-monospace" id="selfHudStatus">READY</span>
+                            <span class="ms-2 text-white-50 text-truncate small" id="selfHudMsg">Position your face clearly within the frame...</span>
+                        </div>
+                        <button type="button" class="btn btn-outline-light btn-sm px-2 py-0" id="btnFlipSelfCamera" title="Switch Camera" style="font-size: 0.75rem;">
+                            <i class="bi bi-arrow-repeat me-1"></i> Flip
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Live Feedback Alert Banner below Camera -->
+                <div class="p-3 bg-light border-top" id="selfMatchResultBox" style="display: none;"></div>
+            </div>
+
+            <!-- Modal Footer -->
+            <div class="modal-footer bg-light border-0 py-2 px-3 d-flex justify-content-between align-items-center">
+                <div class="small text-muted">
+                    <i class="bi bi-shield-lock-fill text-success me-1"></i> Biometric Camera Verification Only
+                </div>
+                <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Cancel</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<style>
+@keyframes selfScanAnim {
+    0% { top: 12%; }
+    50% { top: 84%; }
+    100% { top: 12%; }
+}
+</style>
+
+<script>
+document.addEventListener('DOMContentLoaded', function () {
+    const btnOpenModal = document.getElementById('btnOpenSelfPunchModal');
+    const modalEl = document.getElementById('selfPunchModal');
+    if (!modalEl) return;
+
+    const modal = new bootstrap.Modal(modalEl);
+    const video = document.getElementById('selfPunchVideo');
+    const canvas = document.getElementById('selfPunchCanvas');
+    const overlay = document.getElementById('selfPunchOverlay');
+    const scannerLine = document.getElementById('selfScannerLine');
+    const hudStatus = document.getElementById('selfHudStatus');
+    const hudMsg = document.getElementById('selfHudMsg');
+    const hudMode = document.getElementById('selfHudMode');
+    const liveClock = document.getElementById('selfLiveClock');
+    const btnFlip = document.getElementById('btnFlipSelfCamera');
+    const resultBox = document.getElementById('selfMatchResultBox');
+
+    let currentStream = null;
+    let recognizeInterval = null;
+    let clockInterval = null;
+    let currentFacingMode = 'user';
+    let isScanning = false;
+    let audioContext = null;
+
+    // Active punch mode: defaults based on today's attendance state
+    const defaultPunchMode = "{% if today_attendance and not today_attendance.check_out_time %}check_out{% else %}check_in{% endif %}";
+    let activePunchMode = defaultPunchMode;
+
+    function updatePunchModeUI(mode) {
+        const modalTitle = document.getElementById('selfPunchModalLabel');
+        const modeBadge = document.getElementById('selfHudMode');
+        if (mode === 'check_out') {
+            if (modalTitle) modalTitle.innerHTML = '<i class="bi bi-box-arrow-right text-danger me-2"></i> Punch Check-Out (Camera Verify)';
+            if (modeBadge) {
+                modeBadge.className = 'badge bg-danger bg-opacity-75 border border-danger text-white font-monospace px-2 py-1';
+                modeBadge.innerHTML = '<i class="bi bi-box-arrow-right me-1"></i> PUNCH OUT';
+            }
+        } else {
+            if (modalTitle) modalTitle.innerHTML = '<i class="bi bi-box-arrow-in-right text-success me-2"></i> Punch Check-In (Camera Verify)';
+            if (modeBadge) {
+                modeBadge.className = 'badge bg-success bg-opacity-75 border border-success text-white font-monospace px-2 py-1';
+                modeBadge.innerHTML = '<i class="bi bi-box-arrow-in-right me-1"></i> PUNCH IN';
+            }
+        }
+    }
+
+    // Web Audio chime synthesizer
+    function playTone(type = 'success') {
+        try {
+            if (!audioContext) audioContext = new (window.AudioContext || window.webkitAudioContext)();
+            if (audioContext.state === 'suspended') audioContext.resume();
+            const osc = audioContext.createOscillator();
+            const gain = audioContext.createGain();
+            osc.connect(gain);
+            gain.connect(audioContext.destination);
+
+            if (type === 'success') {
+                osc.type = 'sine';
+                osc.frequency.setValueAtTime(880, audioContext.currentTime);
+                osc.frequency.setValueAtTime(1174.66, audioContext.currentTime + 0.09);
+                gain.gain.setValueAtTime(0.28, audioContext.currentTime);
+                gain.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + 0.32);
+                osc.start();
+                osc.stop(audioContext.currentTime + 0.32);
+            } else {
+                osc.type = 'sawtooth';
+                osc.frequency.setValueAtTime(146.83, audioContext.currentTime);
+                gain.gain.setValueAtTime(0.2, audioContext.currentTime);
+                gain.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + 0.28);
+                osc.start();
+                osc.stop(audioContext.currentTime + 0.28);
+            }
+        } catch (e) {}
+    }
+
+    // Start Live Clock
+    function startClock() {
+        if (clockInterval) clearInterval(clockInterval);
+        function update() {
+            const now = new Date();
+            liveClock.textContent = now.toLocaleTimeString([], { hour12: true, hour: '2-digit', minute: '2-digit', second: '2-digit' });
+        }
+        update();
+        clockInterval = setInterval(update, 1000);
+    }
+
+    // Start Camera Stream
+    async function startCamera(facingMode = 'user') {
+        if (currentStream) {
+            currentStream.getTracks().forEach(t => t.stop());
+            currentStream = null;
+        }
+
+        const constraints = {
+            video: {
+                facingMode: facingMode,
+                width: { ideal: 640 },
+                height: { ideal: 480 }
+            },
+            audio: false
+        };
+
+        try {
+            const stream = await navigator.mediaDevices.getUserMedia(constraints);
+            currentStream = stream;
+            video.srcObject = stream;
+            video.setAttribute('playsinline', '');
+            video.setAttribute('autoplay', '');
+            video.muted = true;
+
+            try {
+                await video.play();
+            } catch (e) {
+                video.onloadedmetadata = () => video.play();
+            }
+
+            video.style.transform = (facingMode === 'user') ? 'scaleX(-1)' : 'scaleX(1)';
+            hudMode.innerHTML = (facingMode === 'user') ? '<i class="bi bi-camera-fill me-1"></i> FRONT CAMERA' : '<i class="bi bi-camera-fill me-1"></i> REAR CAMERA';
+            scannerLine.style.display = 'block';
+            hudStatus.innerText = 'SCANNING';
+            hudStatus.className = 'badge bg-success font-monospace';
+            hudMsg.innerText = 'Biometric scanner active. Looking for your face...';
+            isScanning = true;
+
+            if (!recognizeInterval) {
+                recognizeInterval = setInterval(sampleAndRecognize, 380);
+            }
+        } catch (err) {
+            hudStatus.innerText = 'CAMERA ERROR';
+            hudStatus.className = 'badge bg-danger font-monospace';
+            hudMsg.innerText = err.message || 'Unable to access camera';
+            resultBox.style.display = 'block';
+            resultBox.innerHTML = `
+                <div class="alert alert-danger mb-0 d-flex align-items-center gap-2">
+                    <i class="bi bi-camera-video-off fs-4"></i>
+                    <div>
+                        <strong>Camera Access Blocked:</strong> ${err.message}<br>
+                        <small>Please allow camera permissions in your browser to perform self punch.</small>
+                    </div>
+                </div>
+            `;
+        }
+    }
+
+    // Stop Camera and Clean Up
+    function stopCamera() {
+        isScanning = false;
+        if (recognizeInterval) {
+            clearInterval(recognizeInterval);
+            recognizeInterval = null;
+        }
+        if (clockInterval) {
+            clearInterval(clockInterval);
+            clockInterval = null;
+        }
+        if (currentStream) {
+            currentStream.getTracks().forEach(t => t.stop());
+            currentStream = null;
+        }
+        video.srcObject = null;
+        scannerLine.style.display = 'none';
+        const ctx = overlay.getContext('2d');
+        ctx.clearRect(0, 0, overlay.width, overlay.height);
+    }
+
+    // Flip Camera (Front / Back)
+    btnFlip.addEventListener('click', function () {
+        currentFacingMode = (currentFacingMode === 'user') ? 'environment' : 'user';
+        startCamera(currentFacingMode);
+    });
+
+    // Capture and recognize frame
+    async function sampleAndRecognize() {
+        if (!isScanning || video.readyState !== 4) return;
+
+        const origW = video.videoWidth || 640;
+        const origH = video.videoHeight || 480;
+        const targetW = Math.min(480, origW);
+        const targetH = Math.round((targetW / origW) * origH);
+
+        canvas.width = targetW;
+        canvas.height = targetH;
+        const ctx = canvas.getContext('2d');
+        if (currentFacingMode === 'user') {
+            ctx.translate(canvas.width, 0);
+            ctx.scale(-1, 1);
+        }
+        ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+        const base64Data = canvas.toDataURL('image/jpeg', 0.72);
+
+        try {
+            const resp = await fetch("{% url 'attendance:api_recognize_face' %}", {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ image: base64Data, punch_mode: activePunchMode })
+            });
+            const data = await resp.json();
+
+            // Draw bounding reticle if face detected
+            if (data.box) {
+                let label = '🔍 Scanning Face...';
+                let mode = 'scanning';
+                if (data.matched) {
+                    label = `● ${data.employee_name} (${data.confidence}%)`;
+                    mode = 'recognized';
+                } else if (data.security_alert) {
+                    label = `⛔ BLOCKED: ${data.employee_name || 'Unauthorized'}`;
+                    mode = 'blocked';
+                }
+                drawBoundingBox(data.box, label, mode, data.frame_dims || [targetW, targetH]);
+            } else {
+                const oCtx = overlay.getContext('2d');
+                oCtx.clearRect(0, 0, overlay.width, overlay.height);
+            }
+
+            // Scenario 1: Punch successfully logged!
+            if (data.punch_logged) {
+                isScanning = false;
+                if (recognizeInterval) clearInterval(recognizeInterval);
+                playTone('success');
+
+                hudStatus.innerText = 'VERIFIED';
+                hudStatus.className = 'badge bg-success font-monospace';
+                hudMsg.innerText = data.message;
+                scannerLine.style.display = 'none';
+
+                resultBox.style.display = 'block';
+                resultBox.innerHTML = `
+                    <div class="alert alert-success mb-0 d-flex align-items-center gap-3 shadow-sm">
+                        <i class="bi bi-check-circle-fill fs-1 text-success flex-shrink-0"></i>
+                        <div class="min-w-0 flex-grow-1">
+                            <div class="fw-bold fs-6 text-success">${data.punch_type === 'check_in' ? 'Check-In Verified!' : 'Check-Out Verified!'}</div>
+                            <div class="small text-dark fw-semibold">${data.employee_name} &bull; Recorded at ${data.time_exact || data.time}</div>
+                            <div class="small text-muted mt-1"><i class="bi bi-arrow-repeat me-1 spin"></i> Updating attendance dashboard...</div>
+                        </div>
+                    </div>
+                `;
+
+                // Auto reload page after 1.8 seconds to reflect recorded punch
+                setTimeout(() => {
+                    window.location.href = window.location.pathname;
+                }, 1800);
+                return;
+            }
+
+            // Scenario 2: Security Alert / Proxy Punch Blocked
+            if (data.security_alert) {
+                playTone('denied');
+                hudStatus.innerText = 'BLOCKED';
+                hudStatus.className = 'badge bg-danger font-monospace';
+                hudMsg.innerText = data.message;
+
+                resultBox.style.display = 'block';
+                resultBox.innerHTML = `
+                    <div class="alert alert-danger mb-0 d-flex align-items-center gap-2">
+                        <i class="bi bi-shield-x fs-3 text-danger flex-shrink-0"></i>
+                        <div class="small">
+                            <strong class="d-block text-danger">Security Warning:</strong>
+                            ${data.message}
+                        </div>
+                    </div>
+                `;
+                return;
+            }
+
+            // Scenario 3: Early arrival window restriction
+            if (data.security_status === 'EARLY_RESTRICTION') {
+                hudStatus.innerText = 'EARLY RESTRICTION';
+                hudStatus.className = 'badge bg-warning text-dark font-monospace';
+                hudMsg.innerText = data.message;
+
+                resultBox.style.display = 'block';
+                resultBox.innerHTML = `
+                    <div class="alert alert-warning mb-0 d-flex align-items-center gap-2">
+                        <i class="bi bi-hourglass-split fs-3 text-warning flex-shrink-0"></i>
+                        <div class="small">
+                            <strong>Early Arrival:</strong> ${data.message}
+                        </div>
+                    </div>
+                `;
+                return;
+            }
+
+            // Scenario 4: In cooldown / already checked in recently
+            if (data.in_cooldown) {
+                hudStatus.innerText = 'COOLDOWN';
+                hudStatus.className = 'badge bg-info text-dark font-monospace';
+                hudMsg.innerText = data.message;
+                return;
+            }
+
+            // Scenario 5: Already completed punches today
+            if (data.already_completed) {
+                isScanning = false;
+                if (recognizeInterval) clearInterval(recognizeInterval);
+                hudStatus.innerText = 'COMPLETED';
+                hudStatus.className = 'badge bg-secondary font-monospace';
+                hudMsg.innerText = 'Both Check-In and Check-Out completed for today.';
+
+                resultBox.style.display = 'block';
+                resultBox.innerHTML = `
+                    <div class="alert alert-info mb-0 d-flex align-items-center gap-2">
+                        <i class="bi bi-info-circle-fill fs-3 text-info flex-shrink-0"></i>
+                        <div class="small">
+                            <strong>Punches Completed:</strong> Your attendance for today has already been fully recorded.
+                        </div>
+                    </div>
+                `;
+                return;
+            }
+
+            // Idle scanning feedback
+            if (!data.matched) {
+                hudStatus.innerText = 'SCANNING';
+                hudStatus.className = 'badge bg-success font-monospace';
+                hudMsg.innerText = 'Looking for enrolled face... please face the camera';
+            }
+        } catch (e) {
+            // Network / decoding catch
+        }
+    }
+
+    // Draw high-tech bounding box on canvas overlay (Accurately Mirrored on User Camera)
+    function drawBoundingBox(box, label, mode, frameDims) {
+        overlay.width = video.clientWidth;
+        overlay.height = video.clientHeight;
+        const ctx = overlay.getContext('2d');
+        ctx.clearRect(0, 0, overlay.width, overlay.height);
+
+        if (!box) return;
+
+        const fW = (frameDims && frameDims[0]) ? frameDims[0] : 480;
+        const fH = (frameDims && frameDims[1]) ? frameDims[1] : 360;
+        const scaleX = overlay.width / fW;
+        const scaleY = overlay.height / fH;
+
+        const w = box[2] * scaleX;
+        const h = box[3] * scaleY;
+        // Mirror box position when front camera is mirrored with scaleX(-1)
+        const x = (currentFacingMode === 'user')
+            ? (overlay.width - (box[0] * scaleX + w))
+            : (box[0] * scaleX);
+        const y = box[1] * scaleY;
+
+        ctx.save();
+        ctx.strokeStyle = (mode === 'recognized') ? '#22c55e' : (mode === 'blocked' ? '#ef4444' : '#38bdf8');
+        ctx.lineWidth = 3;
+        ctx.strokeRect(x, y, w, h);
+
+        ctx.fillStyle = (mode === 'recognized') ? 'rgba(34, 197, 94, 0.15)' : (mode === 'blocked' ? 'rgba(239, 68, 68, 0.15)' : 'rgba(56, 189, 248, 0.12)');
+        ctx.fillRect(x, y, w, h);
+
+        if (label) {
+            ctx.font = 'bold 12px system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
+            const metrics = ctx.measureText(label);
+            const tagW = Math.max(w, metrics.width + 16);
+            const tagH = 22;
+            const tagY = Math.max(2, y - tagH - 4);
+
+            ctx.fillStyle = (mode === 'recognized') ? '#16a34a' : (mode === 'blocked' ? '#dc2626' : '#0284c7');
+            if (ctx.roundRect) {
+                ctx.beginPath();
+                ctx.roundRect(x, tagY, tagW, tagH, 4);
+                ctx.fill();
+            } else {
+                ctx.fillRect(x, tagY, tagW, tagH);
+            }
+
+            ctx.fillStyle = '#ffffff';
+            ctx.fillText(label, x + 8, tagY + 15);
+        }
+        ctx.restore();
+    }
+
+    // Event Listeners for Modal
+    if (btnOpenModal) {
+        btnOpenModal.addEventListener('click', function () {
+            activePunchMode = this.getAttribute('data-punch-mode') || defaultPunchMode;
+            updatePunchModeUI(activePunchMode);
+            resultBox.style.display = 'none';
+            resultBox.innerHTML = '';
+            modal.show();
+        });
+    }
+
+    modalEl.addEventListener('shown.bs.modal', function () {
+        updatePunchModeUI(activePunchMode);
+        startClock();
+        startCamera(currentFacingMode);
+    });
+
+    modalEl.addEventListener('hidden.bs.modal', function () {
+        stopCamera();
+    });
+
+    // Auto-launch if URL contains ?punch=camera or ?action=camera_punch
+    const urlParams = new URLSearchParams(window.location.search);
+    if (urlParams.get('punch') === 'camera' || urlParams.get('action') === 'camera_punch') {
+        activePunchMode = defaultPunchMode;
+        updatePunchModeUI(activePunchMode);
+        if (btnOpenModal) {
+            btnOpenModal.click();
+        } else {
+            modal.show();
+        }
+    }
+});
+</script>
+{% endblock %}
