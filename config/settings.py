@@ -55,6 +55,13 @@ MIDDLEWARE = [
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
 ]
 
+# Enable WhiteNoise for cloud deployments if installed
+try:
+    import whitenoise  # noqa: F401
+    MIDDLEWARE.insert(1, 'whitenoise.middleware.WhiteNoiseMiddleware')
+except ImportError:
+    pass
+
 ROOT_URLCONF = 'config.urls'
 
 TEMPLATES = [
