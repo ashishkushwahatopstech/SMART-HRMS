@@ -19,6 +19,16 @@ DEBUG = True
 # Allow all hosts so mobile devices on the same Wi-Fi can connect to the PC
 ALLOWED_HOSTS = ['*']
 
+# Trusted origins for CSRF protection across local development and cloud platforms
+CSRF_TRUSTED_ORIGINS = [
+    'https://*.pythonanywhere.com',
+    'https://*.onrender.com',
+    'https://*.koyeb.app',
+    'https://127.0.0.1:8000',
+    'https://localhost:8000',
+    'https://10.27.5.77:8000',
+]
+
 # Dynamic Site URL setting (fallback when running outside an active request context)
 SITE_URL = os.environ.get('SITE_URL', 'https://10.27.5.77:8000')
 
