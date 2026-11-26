@@ -199,6 +199,18 @@ class Employee(models.Model):
         help_text="Assigned shift schedule label"
     )
 
+    # Individual Scheduled Lunch Break (Defaults from assigned shift, can be customized per employee)
+    lunch_start_time = models.TimeField(
+        null=True,
+        blank=True,
+        help_text="Scheduled lunch break start time (e.g. 13:00 / 01:00 PM)"
+    )
+    lunch_end_time = models.TimeField(
+        null=True,
+        blank=True,
+        help_text="Scheduled lunch break end time (e.g. 14:00 / 02:00 PM)"
+    )
+
     # Face Biometric Enrollment
     face_registration_status = models.BooleanField(
         default=False,
@@ -293,6 +305,13 @@ class Employee(models.Model):
         return candidate
 
     def save(self, *args, **kwargs):
+        # Auto-inherit lunch timings from assigned shift if not set
+        if self.assigned_shift:
+            if not self.lunch_start_time and self.assigned_shift.lunch_start_time:
+                self.lunch_start_time = self.assigned_shift.lunch_start_time
+            if not self.lunch_end_time and self.assigned_shift.lunch_end_time:
+                self.lunch_end_time = self.assigned_shift.lunch_end_time
+
         # Auto-compute daily and hourly rates if left at zero and monthly salary is specified
         if self.salary_type == self.SalaryType.MONTHLY and self.monthly_salary > 0:
             if not self.daily_salary or self.daily_salary == Decimal('0.00'):

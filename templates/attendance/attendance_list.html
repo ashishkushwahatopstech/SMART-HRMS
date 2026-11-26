@@ -178,6 +178,17 @@
                                 <span class="badge bg-light text-muted border border-dashed font-monospace px-2 py-1">&mdash;&mdash;</span>
                             {% endif %}
 
+                            <!-- Lunch Break Badge -->
+                            {% if att.lunch_start_time and att.lunch_end_time %}
+                                <span class="badge bg-warning-subtle text-dark border border-warning-subtle font-monospace px-2 py-1" title="Lunch Break: {{ att.lunch_start_time|date:'h:i A' }} - {{ att.lunch_end_time|date:'h:i A' }} ({{ att.total_lunch_duration_minutes }}m)">
+                                    <i class="bi bi-cup-hot me-1 text-warning"></i>{{ att.lunch_start_time|date:"h:i A" }}
+                                </span>
+                            {% elif att.lunch_start_time %}
+                                <span class="badge bg-warning text-dark font-monospace px-2 py-1" title="On Lunch since {{ att.lunch_start_time|date:'h:i A' }}">
+                                    <i class="bi bi-cup-hot-fill me-1"></i>Lunch...
+                                </span>
+                            {% endif %}
+
                             <!-- Punch Out: Blank dashed placeholder until punched out -->
                             {% if att.check_out_time %}
                                 <span class="badge bg-primary-subtle text-primary border border-primary-subtle font-monospace px-2 py-1" title="Punch Out: {{ att.check_out_time|date:'h:i A' }}">

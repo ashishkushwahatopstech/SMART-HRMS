@@ -148,6 +148,30 @@
                             </div>
                             {% if form.working_hours_per_day.errors %}<div class="text-danger small mt-1">{{ form.working_hours_per_day.errors.0 }}</div>{% endif %}
                         </div>
+
+                        <!-- Scheduled Lunch Break Settings (Default from shift, customizable per employee) -->
+                        <div class="col-md-6">
+                            <label for="{{ form.lunch_start_time.id_for_label }}" class="form-label fw-semibold small">
+                                <i class="bi bi-cup-hot me-1 text-warning"></i> Lunch Break Start Time
+                            </label>
+                            <div class="input-group">
+                                {{ form.lunch_start_time }}
+                                <span class="input-group-text small bg-light"><i class="bi bi-clock"></i></span>
+                            </div>
+                            <div class="form-text small text-muted" id="lunchStartHelp">Fixed by shift; customizable per employee</div>
+                            {% if form.lunch_start_time.errors %}<div class="text-danger small mt-1">{{ form.lunch_start_time.errors.0 }}</div>{% endif %}
+                        </div>
+                        <div class="col-md-6">
+                            <label for="{{ form.lunch_end_time.id_for_label }}" class="form-label fw-semibold small">
+                                <i class="bi bi-arrow-return-right me-1 text-info"></i> Lunch Break End Time
+                            </label>
+                            <div class="input-group">
+                                {{ form.lunch_end_time }}
+                                <span class="input-group-text small bg-light"><i class="bi bi-clock-history"></i></span>
+                            </div>
+                            <div class="form-text small text-muted" id="lunchEndHelp">Default end time of lunch break</div>
+                            {% if form.lunch_end_time.errors %}<div class="text-danger small mt-1">{{ form.lunch_end_time.errors.0 }}</div>{% endif %}
+                        </div>
                     </div>
                 </div>
 
@@ -275,6 +299,8 @@ document.addEventListener('DOMContentLoaded', function () {
 
     // Store shift details (hours & timings)
     const shiftHoursMap = {};
+    const initialShiftsMap = {{ shifts_map_json|default:"{}"|safe }};
+    Object.assign(shiftHoursMap, initialShiftsMap);
 
     function parseShiftOption(text) {
         // e.g. "General Shift (09:00 AM - 06:00 PM • 8.0 hrs)"
@@ -303,8 +329,20 @@ document.addEventListener('DOMContentLoaded', function () {
                 if (shiftNameInput) {
                     shiftNameInput.value = s.label.replace(/\s*•.*/, ')').trim();
                 }
+
+                // Auto-fill lunch start & end times from shift
+                const lunchStartInput = document.getElementById('id_lunch_start_time');
+                const lunchEndInput = document.getElementById('id_lunch_end_time');
+                if (lunchStartInput && s.lunch_start && (isUserAction || !lunchStartInput.value)) {
+                    lunchStartInput.value = s.lunch_start;
+                }
+                if (lunchEndInput && s.lunch_end && (isUserAction || !lunchEndInput.value)) {
+                    lunchEndInput.value = s.lunch_end;
+                }
+
                 if (shiftTimingInfo) {
-                    shiftTimingInfo.innerHTML = `<span class="badge bg-primary-subtle text-primary border border-primary-subtle"><i class="bi bi-clock me-1"></i>${s.timing || 'Shift Schedule'}</span> <span class="badge bg-success-subtle text-success border border-success-subtle ms-1"><i class="bi bi-check2-circle me-1"></i>${s.hours} hrs/day</span>`;
+                    const lunchBadge = s.lunch_display ? `<span class="badge bg-warning-subtle text-dark border border-warning-subtle ms-1"><i class="bi bi-cup-hot me-1"></i>Lunch: ${s.lunch_display}</span>` : '';
+                    shiftTimingInfo.innerHTML = `<span class="badge bg-primary-subtle text-primary border border-primary-subtle"><i class="bi bi-clock me-1"></i>${s.timing || 'Shift Schedule'}</span> <span class="badge bg-success-subtle text-success border border-success-subtle ms-1"><i class="bi bi-check2-circle me-1"></i>${s.hours} hrs/day</span>${lunchBadge}`;
                 }
                 if (hoursCalcStatus && isUserAction) {
                     hoursCalcStatus.innerHTML = `<i class="bi bi-magic me-1"></i>Auto-calculated: <strong>${s.hours} hrs</strong>`;
@@ -388,6 +426,9 @@ document.addEventListener('DOMContentLoaded', function () {
                         shiftHoursMap[s.id] = {
                             hours: s.hours,
                             timing: s.display_time,
+                            lunch_start: s.lunch_start,
+                            lunch_end: s.lunch_end,
+                            lunch_display: s.lunch_display,
                             label: `${s.name} (${s.display_time} • ${s.hours} hrs)`
                         };
                         const opt = document.createElement('option');

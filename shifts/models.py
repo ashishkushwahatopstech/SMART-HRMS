@@ -29,6 +29,18 @@ class Shift(models.Model):
         default=60,
         help_text="Allocated lunch break in minutes (e.g. 60 or 45)"
     )
+    lunch_start_time = models.TimeField(
+        null=True,
+        blank=True,
+        default=time(13, 0),
+        help_text="Default shift lunch break start time (e.g. 13:00:00 / 01:00 PM)"
+    )
+    lunch_end_time = models.TimeField(
+        null=True,
+        blank=True,
+        default=time(14, 0),
+        help_text="Default shift lunch break end time (e.g. 14:00:00 / 02:00 PM)"
+    )
     break_duration_minutes = models.PositiveSmallIntegerField(
         default=15,
         help_text="Allocated tea/personal break in minutes"

@@ -53,33 +53,48 @@
                 </div>
             </div>
 
-            <!-- Punch In / Out Status -->
+            <!-- Punch In / Lunch / Out Status -->
             <div class="row g-2 text-center mb-4">
-                <div class="col-6">
-                    <div class="p-3 border rounded-3 bg-white">
+                <div class="col-4">
+                    <div class="p-2 p-sm-3 border rounded-3 bg-white h-100">
                         <div class="text-muted small mb-1">Check-In</div>
                         {% if today_attendance and today_attendance.check_in_time %}
-                            <div class="fs-5 fw-bold text-success">{{ today_attendance.check_in_time|date:"h:i A" }}</div>
+                            <div class="fs-6 fs-sm-5 fw-bold text-success">{{ today_attendance.check_in_time|date:"h:i A" }}</div>
                             {% if today_attendance.is_late %}
-                                <span class="badge bg-warning text-dark mt-1">Late ({{ today_attendance.late_minutes }}m)</span>
+                                <span class="badge bg-warning text-dark mt-1" style="font-size: 0.65rem;">Late ({{ today_attendance.late_minutes }}m)</span>
                             {% else %}
-                                <span class="badge bg-success-subtle text-success mt-1">On Time</span>
+                                <span class="badge bg-success-subtle text-success mt-1" style="font-size: 0.65rem;">On Time</span>
                             {% endif %}
                         {% else %}
-                            <div class="fs-5 fw-bold text-muted">&mdash;</div>
-                            <span class="badge bg-light text-muted border mt-1">Pending</span>
+                            <div class="fs-6 fs-sm-5 fw-bold text-muted">&mdash;</div>
+                            <span class="badge bg-light text-muted border mt-1" style="font-size: 0.65rem;">Pending</span>
                         {% endif %}
                     </div>
                 </div>
-                <div class="col-6">
-                    <div class="p-3 border rounded-3 bg-white">
+                <div class="col-4">
+                    <div class="p-2 p-sm-3 border rounded-3 bg-white h-100">
+                        <div class="text-muted small mb-1">Lunch Break</div>
+                        {% if today_attendance and today_attendance.lunch_start_time and today_attendance.lunch_end_time %}
+                            <div class="fs-6 fs-sm-5 fw-bold text-warning">{{ today_attendance.lunch_start_time|date:"h:i A" }}</div>
+                            <span class="badge bg-warning-subtle text-dark border border-warning-subtle mt-1" style="font-size: 0.65rem;">{{ today_attendance.total_lunch_duration_minutes }}m taken</span>
+                        {% elif today_attendance and today_attendance.lunch_start_time %}
+                            <div class="fs-6 fs-sm-5 fw-bold text-warning">{{ today_attendance.lunch_start_time|date:"h:i A" }}</div>
+                            <span class="badge bg-warning text-dark mt-1" style="font-size: 0.65rem;">On Lunch</span>
+                        {% else %}
+                            <div class="fs-6 fs-sm-5 fw-bold text-muted">&mdash;</div>
+                            <span class="badge bg-light text-muted border mt-1" style="font-size: 0.65rem;">Not Taken</span>
+                        {% endif %}
+                    </div>
+                </div>
+                <div class="col-4">
+                    <div class="p-2 p-sm-3 border rounded-3 bg-white h-100">
                         <div class="text-muted small mb-1">Check-Out</div>
                         {% if today_attendance and today_attendance.check_out_time %}
-                            <div class="fs-5 fw-bold text-primary">{{ today_attendance.check_out_time|date:"h:i A" }}</div>
-                            <span class="badge bg-primary-subtle text-primary mt-1">{{ today_attendance.total_working_hours }}h Total</span>
+                            <div class="fs-6 fs-sm-5 fw-bold text-primary">{{ today_attendance.check_out_time|date:"h:i A" }}</div>
+                            <span class="badge bg-primary-subtle text-primary mt-1" style="font-size: 0.65rem;">{{ today_attendance.total_working_hours }}h Total</span>
                         {% else %}
-                            <div class="fs-5 fw-bold text-muted">&mdash;</div>
-                            <span class="badge bg-light text-muted border mt-1">
+                            <div class="fs-6 fs-sm-5 fw-bold text-muted">&mdash;</div>
+                            <span class="badge bg-light text-muted border mt-1" style="font-size: 0.65rem;">
                                 {% if today_attendance %}In Progress{% else %}Not In Yet{% endif %}
                             </span>
                         {% endif %}
@@ -107,14 +122,47 @@
                         <i class="bi bi-shield-check text-success me-1"></i> Biometric Camera Verification Only
                     </div>
                 {% elif not today_attendance.check_out_time %}
-                    <!-- Punch Check-Out Button -->
-                    <button type="button" class="btn btn-danger btn-lg w-100 shadow-sm py-2 fw-bold d-flex align-items-center justify-content-center gap-2" id="btnOpenSelfPunchModal" data-punch-mode="check_out">
-                        <i class="bi bi-camera-video-fill fs-5"></i>
-                        <span>Punch Check-Out (Camera Verify)</span>
-                    </button>
-                    <div class="text-center text-muted small mt-2">
-                        <i class="bi bi-clock-history text-primary me-1"></i> Checked in at {{ today_attendance.check_in_time|date:"h:i A" }} &bull; Camera Punch Out
-                    </div>
+                    {% if today_attendance.lunch_start_time and not today_attendance.lunch_end_time %}
+                        <!-- Currently On Lunch: Punch Lunch In to resume work -->
+                        <button type="button" class="btn btn-info btn-lg w-100 shadow-sm py-2 fw-bold d-flex align-items-center justify-content-center gap-2 mb-2 btn-open-self-punch" data-punch-mode="lunch_in">
+                            <i class="bi bi-arrow-return-right fs-5"></i>
+                            <span>Punch Lunch In (Resume Work)</span>
+                        </button>
+                        <div class="d-flex justify-content-between align-items-center">
+                            <span class="text-muted small"><i class="bi bi-cup-hot-fill text-warning me-1"></i>On lunch since {{ today_attendance.lunch_start_time|date:"h:i A" }}</span>
+                            <button type="button" class="btn btn-outline-danger btn-sm py-1 px-2 btn-open-self-punch" data-punch-mode="check_out">
+                                <i class="bi bi-box-arrow-right me-1"></i>Early Check-Out
+                            </button>
+                        </div>
+                    {% elif not today_attendance.lunch_start_time %}
+                        <!-- Checked In, lunch not taken yet -->
+                        <div class="row g-2 mb-2">
+                            <div class="col-6">
+                                <button type="button" class="btn btn-warning btn-md w-100 shadow-sm py-2 fw-bold d-flex align-items-center justify-content-center gap-1 text-dark btn-open-self-punch" data-punch-mode="lunch_out">
+                                    <i class="bi bi-cup-hot fs-5 text-dark"></i>
+                                    <span>Lunch Out</span>
+                                </button>
+                            </div>
+                            <div class="col-6">
+                                <button type="button" class="btn btn-danger btn-md w-100 shadow-sm py-2 fw-bold d-flex align-items-center justify-content-center gap-1 btn-open-self-punch" data-punch-mode="check_out">
+                                    <i class="bi bi-box-arrow-right fs-5"></i>
+                                    <span>Check-Out</span>
+                                </button>
+                            </div>
+                        </div>
+                        <div class="text-center text-muted small mt-1">
+                            <i class="bi bi-clock-history text-primary me-1"></i> Checked in at {{ today_attendance.check_in_time|date:"h:i A" }}
+                        </div>
+                    {% else %}
+                        <!-- Lunch completed, final checkout pending -->
+                        <button type="button" class="btn btn-danger btn-lg w-100 shadow-sm py-2 fw-bold d-flex align-items-center justify-content-center gap-2 btn-open-self-punch" data-punch-mode="check_out">
+                            <i class="bi bi-camera-video-fill fs-5"></i>
+                            <span>Punch Check-Out (Camera Verify)</span>
+                        </button>
+                        <div class="text-center text-muted small mt-2">
+                            <i class="bi bi-cup-hot text-warning me-1"></i> Lunch Break: {{ today_attendance.total_lunch_duration_minutes }}m completed &bull; Camera Punch Out
+                        </div>
+                    {% endif %}
                 {% else %}
                     <!-- Punch Completed -->
                     <button type="button" class="btn btn-outline-secondary btn-lg w-100 py-2 fw-semibold" disabled>
@@ -237,6 +285,17 @@
                                 </span>
                             {% else %}
                                 <span class="badge bg-light text-muted border border-dashed font-monospace px-2 py-1">&mdash;&mdash;</span>
+                            {% endif %}
+
+                            <!-- Lunch Break Badge -->
+                            {% if att.lunch_start_time and att.lunch_end_time %}
+                                <span class="badge bg-warning-subtle text-dark border border-warning-subtle font-monospace px-2 py-1" title="Lunch Break: {{ att.lunch_start_time|date:'h:i A' }} - {{ att.lunch_end_time|date:'h:i A' }} ({{ att.total_lunch_duration_minutes }}m)">
+                                    <i class="bi bi-cup-hot me-1 text-warning"></i>{{ att.lunch_start_time|date:"h:i A" }}
+                                </span>
+                            {% elif att.lunch_start_time %}
+                                <span class="badge bg-warning text-dark font-monospace px-2 py-1" title="On Lunch since {{ att.lunch_start_time|date:'h:i A' }}">
+                                    <i class="bi bi-cup-hot-fill me-1"></i>Lunch...
+                                </span>
                             {% endif %}
 
                             <!-- Punch Out: Blank dashed placeholder until punch out occurs -->
@@ -515,6 +574,18 @@ document.addEventListener('DOMContentLoaded', function () {
             if (modeBadge) {
                 modeBadge.className = 'badge bg-danger bg-opacity-75 border border-danger text-white font-monospace px-2 py-1';
                 modeBadge.innerHTML = '<i class="bi bi-box-arrow-right me-1"></i> PUNCH OUT';
+            }
+        } else if (mode === 'lunch_out') {
+            if (modalTitle) modalTitle.innerHTML = '<i class="bi bi-cup-hot text-warning me-2"></i> Punch Lunch Out (Camera Verify)';
+            if (modeBadge) {
+                modeBadge.className = 'badge bg-warning bg-opacity-75 border border-warning text-dark font-monospace px-2 py-1';
+                modeBadge.innerHTML = '<i class="bi bi-cup-hot me-1"></i> LUNCH OUT';
+            }
+        } else if (mode === 'lunch_in') {
+            if (modalTitle) modalTitle.innerHTML = '<i class="bi bi-arrow-return-right text-info me-2"></i> Punch Lunch In (Camera Verify)';
+            if (modeBadge) {
+                modeBadge.className = 'badge bg-info bg-opacity-75 border border-info text-dark font-monospace px-2 py-1';
+                modeBadge.innerHTML = '<i class="bi bi-arrow-return-right me-1"></i> LUNCH IN';
             }
         } else {
             if (modalTitle) modalTitle.innerHTML = '<i class="bi bi-box-arrow-in-right text-success me-2"></i> Punch Check-In (Camera Verify)';
@@ -854,15 +925,15 @@ document.addEventListener('DOMContentLoaded', function () {
     }
 
     // Event Listeners for Modal
-    if (btnOpenModal) {
-        btnOpenModal.addEventListener('click', function () {
+    document.querySelectorAll('.btn-open-self-punch, #btnOpenSelfPunchModal').forEach(btn => {
+        btn.addEventListener('click', function () {
             activePunchMode = this.getAttribute('data-punch-mode') || defaultPunchMode;
             updatePunchModeUI(activePunchMode);
             resultBox.style.display = 'none';
             resultBox.innerHTML = '';
             modal.show();
         });
-    }
+    });
 
     modalEl.addEventListener('shown.bs.modal', function () {
         updatePunchModeUI(activePunchMode);

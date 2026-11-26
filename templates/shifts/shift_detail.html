@@ -42,8 +42,14 @@
 
             <div class="small text-muted">
                 <div class="d-flex justify-content-between py-2 border-bottom">
-                    <span>Lunch Break Duration:</span>
-                    <strong class="text-dark">{{ shift.lunch_duration_minutes }} Minutes</strong>
+                    <span>Lunch Break Window:</span>
+                    <strong class="text-dark">
+                        {% if shift.lunch_start_time and shift.lunch_end_time %}
+                            <i class="bi bi-clock me-1 text-primary"></i>{{ shift.lunch_start_time|time:"h:i A" }} &mdash; {{ shift.lunch_end_time|time:"h:i A" }} ({{ shift.lunch_duration_minutes }} Mins)
+                        {% else %}
+                            {{ shift.lunch_duration_minutes }} Minutes
+                        {% endif %}
+                    </strong>
                 </div>
                 <div class="d-flex justify-content-between py-2 border-bottom">
                     <span>Tea/Personal Break:</span>

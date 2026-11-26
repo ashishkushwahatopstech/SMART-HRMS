@@ -1,3 +1,4 @@
+import json
 from decimal import Decimal
 from django.shortcuts import render, redirect, get_object_or_404
 from django.http import JsonResponse
@@ -141,6 +142,25 @@ def employee_detail(request, pk):
     })
 
 
+def get_shifts_map_for_user(user, company=None):
+    qs = Shift.objects.filter(is_active=True)
+    if company:
+        qs = qs.filter(company=company)
+    elif not user.is_superuser and hasattr(user, 'employee_profile') and user.employee_profile:
+        qs = qs.filter(company=user.employee_profile.company)
+    shifts = {}
+    for s in qs:
+        shifts[str(s.id)] = {
+            'hours': float(s.total_expected_hours or 8.0),
+            'lunch_start': s.lunch_start_time.strftime('%H:%M') if s.lunch_start_time else '13:00',
+            'lunch_end': s.lunch_end_time.strftime('%H:%M') if s.lunch_end_time else '14:00',
+            'lunch_display': f"{s.lunch_start_time.strftime('%I:%M %p')} - {s.lunch_end_time.strftime('%I:%M %p')}" if s.lunch_start_time and s.lunch_end_time else '01:00 PM - 02:00 PM',
+            'timing': f"{s.start_time.strftime('%I:%M %p')} - {s.end_time.strftime('%I:%M %p')}",
+            'label': f"{s.name} ({s.start_time.strftime('%I:%M %p')} - {s.end_time.strftime('%I:%M %p')} • {s.total_expected_hours} hrs)"
+        }
+    return shifts
+
+
 @hr_required
 def employee_create(request):
     """
@@ -218,6 +238,7 @@ def employee_create(request):
         'form': form,
         'title': 'Add New Employee',
         'is_edit': False,
+        'shifts_map_json': json.dumps(get_shifts_map_for_user(request.user)),
     })
 
 
@@ -279,6 +300,7 @@ def employee_edit(request, pk):
         'employee': employee,
         'title': f'Edit Employee: {employee.get_full_name()}',
         'is_edit': True,
+        'shifts_map_json': json.dumps(get_shifts_map_for_user(request.user, company=employee.company)),
     })
 
 
@@ -487,13 +509,18 @@ def api_company_options(request, company_id):
 
     next_id = Employee.generate_next_employee_id(company)
 
-    shifts = list(Shift.objects.filter(company=company, is_active=True).values('id', 'name', 'start_time', 'end_time', 'total_expected_hours'))
+    shifts = list(Shift.objects.filter(company=company, is_active=True).values(
+        'id', 'name', 'start_time', 'end_time', 'total_expected_hours', 'lunch_start_time', 'lunch_end_time'
+    ))
     shifts_data = [
         {
             'id': s['id'],
             'name': s['name'],
             'display_time': f"{s['start_time'].strftime('%I:%M %p')} - {s['end_time'].strftime('%I:%M %p')}" if s['start_time'] and s['end_time'] else '',
-            'hours': float(s['total_expected_hours'] or 8.0)
+            'hours': float(s['total_expected_hours'] or 8.0),
+            'lunch_start': s['lunch_start_time'].strftime('%H:%M') if s['lunch_start_time'] else '13:00',
+            'lunch_end': s['lunch_end_time'].strftime('%H:%M') if s['lunch_end_time'] else '14:00',
+            'lunch_display': f"{s['lunch_start_time'].strftime('%I:%M %p')} - {s['lunch_end_time'].strftime('%I:%M %p')}" if s['lunch_start_time'] and s['lunch_end_time'] else '01:00 PM - 02:00 PM',
         }
         for s in shifts
     ]

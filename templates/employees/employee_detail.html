@@ -114,6 +114,18 @@
                             <span>Assigned Shift:</span>
                             <strong class="text-dark">{{ employee.assigned_shift_name }}</strong>
                         </div>
+                        <div class="d-flex justify-content-between align-items-center py-2 border-bottom">
+                            <span>Scheduled Lunch:</span>
+                            <strong class="text-dark">
+                                {% if employee.lunch_start_time and employee.lunch_end_time %}
+                                    <span class="badge bg-warning-subtle text-dark border border-warning-subtle">
+                                        <i class="bi bi-cup-hot me-1 text-warning"></i>{{ employee.lunch_start_time|time:"h:i A" }} &mdash; {{ employee.lunch_end_time|time:"h:i A" }}
+                                    </span>
+                                {% else %}
+                                    <span class="text-muted small">Standard Shift Lunch</span>
+                                {% endif %}
+                            </strong>
+                        </div>
                         <div class="d-flex justify-content-between align-items-center py-2">
                             <span>System Login / Access Role:</span>
                             <div class="d-flex align-items-center gap-2">

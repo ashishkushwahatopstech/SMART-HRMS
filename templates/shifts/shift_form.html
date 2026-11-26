@@ -138,21 +138,56 @@
                     </div>
                 </div>
 
-                <!-- Section 3: Breaks, Grace Period & Overtime -->
+                <!-- Section 3: Breaks, Grace Period & Policy -->
                 <div class="mb-4 border-top pt-4">
                     <h6 class="fw-bold text-primary mb-3">
-                        <i class="bi bi-cup-hot me-1"></i> 3. Breaks, Grace Period & Policy
+                        <i class="bi bi-cup-hot me-1"></i> 3. Lunch Timings, Breaks & Policy
                     </h6>
                     <div class="row g-3">
                         <div class="col-md-4">
-                            <label for="{{ form.lunch_duration_minutes.id_for_label }}" class="form-label fw-semibold small">Lunch Break (Mins)</label>
-                            {{ form.lunch_duration_minutes }}
+                            <label for="{{ form.lunch_start_time.id_for_label }}" class="form-label fw-semibold small">
+                                <i class="bi bi-clock me-1 text-primary"></i> Lunch Start Time
+                            </label>
+                            <div class="input-group">
+                                {{ form.lunch_start_time }}
+                                <button type="button" class="btn btn-outline-primary btn-open-clock" data-target="id_lunch_start_time" data-title="Lunch Start Time" title="Choose time from Clock">
+                                    <i class="bi bi-clock-fill"></i>
+                                </button>
+                            </div>
+                            <div class="mt-1 d-flex flex-wrap gap-1">
+                                <button type="button" class="btn btn-xs btn-outline-secondary py-0 px-2 clock-preset-btn" data-target="id_lunch_start_time" data-val="12:30">12:30 PM</button>
+                                <button type="button" class="btn btn-xs btn-outline-secondary py-0 px-2 clock-preset-btn" data-target="id_lunch_start_time" data-val="13:00">01:00 PM</button>
+                                <button type="button" class="btn btn-xs btn-outline-secondary py-0 px-2 clock-preset-btn" data-target="id_lunch_start_time" data-val="13:30">01:30 PM</button>
+                            </div>
+                            {% if form.lunch_start_time.errors %}<div class="text-danger small mt-1">{{ form.lunch_start_time.errors.0 }}</div>{% endif %}
                         </div>
                         <div class="col-md-4">
+                            <label for="{{ form.lunch_end_time.id_for_label }}" class="form-label fw-semibold small">
+                                <i class="bi bi-clock-history me-1 text-primary"></i> Lunch End Time
+                            </label>
+                            <div class="input-group">
+                                {{ form.lunch_end_time }}
+                                <button type="button" class="btn btn-outline-primary btn-open-clock" data-target="id_lunch_end_time" data-title="Lunch End Time" title="Choose time from Clock">
+                                    <i class="bi bi-clock-fill"></i>
+                                </button>
+                            </div>
+                            <div class="mt-1 d-flex flex-wrap gap-1">
+                                <button type="button" class="btn btn-xs btn-outline-secondary py-0 px-2 clock-preset-btn" data-target="id_lunch_end_time" data-val="13:30">01:30 PM</button>
+                                <button type="button" class="btn btn-xs btn-outline-secondary py-0 px-2 clock-preset-btn" data-target="id_lunch_end_time" data-val="14:00">02:00 PM</button>
+                                <button type="button" class="btn btn-xs btn-outline-secondary py-0 px-2 clock-preset-btn" data-target="id_lunch_end_time" data-val="14:30">02:30 PM</button>
+                            </div>
+                            {% if form.lunch_end_time.errors %}<div class="text-danger small mt-1">{{ form.lunch_end_time.errors.0 }}</div>{% endif %}
+                        </div>
+                        <div class="col-md-4">
+                            <label for="{{ form.lunch_duration_minutes.id_for_label }}" class="form-label fw-semibold small">Lunch Break (Mins)</label>
+                            {{ form.lunch_duration_minutes }}
+                            <div class="form-text small">Allocated break duration</div>
+                        </div>
+                        <div class="col-md-6">
                             <label for="{{ form.break_duration_minutes.id_for_label }}" class="form-label fw-semibold small">Tea/Personal Break (Mins)</label>
                             {{ form.break_duration_minutes }}
                         </div>
-                        <div class="col-md-4">
+                        <div class="col-md-6">
                             <label for="{{ form.grace_period_minutes.id_for_label }}" class="form-label fw-semibold small">Late Grace Window (Mins)</label>
                             {{ form.grace_period_minutes }}
                             <div class="form-text small">Allowed late arrival window</div>
@@ -549,6 +584,26 @@ document.addEventListener('DOMContentLoaded', function () {
     if (endInput) {
         endInput.addEventListener('change', () => recalculateExpectedHours(false));
     }
+
+    // Auto-calculate lunch duration from lunch start & end
+    const lunchStartInput = document.getElementById('id_lunch_start_time');
+    const lunchEndInput = document.getElementById('id_lunch_end_time');
+    const lunchDurInput = document.getElementById('id_lunch_duration_minutes');
+
+    function recalculateLunchDuration() {
+        if (!lunchStartInput || !lunchEndInput || !lunchDurInput) return;
+        const sVal = lunchStartInput.value;
+        const eVal = lunchEndInput.value;
+        if (!sVal || !eVal) return;
+        const [sh, sm] = sVal.split(':').map(Number);
+        const [eh, em] = eVal.split(':').map(Number);
+        let diff = (eh * 60 + em) - (sh * 60 + sm);
+        if (diff < 0) diff += 24 * 60;
+        if (diff > 0) lunchDurInput.value = diff;
+    }
+
+    if (lunchStartInput) lunchStartInput.addEventListener('change', recalculateLunchDuration);
+    if (lunchEndInput) lunchEndInput.addEventListener('change', recalculateLunchDuration);
 
     if (hoursInput) {
         hoursInput.addEventListener('input', function () {

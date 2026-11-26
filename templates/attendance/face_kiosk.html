@@ -96,6 +96,20 @@ body.kiosk-active-fullscreen {
     box-shadow: 0 0 10px rgba(220, 53, 69, 0.6) !important;
 }
 
+#kioskCard.kiosk-fullscreen-mode .btn-check:checked + .btn-outline-warning {
+    background-color: #d97706 !important;
+    border-color: #d97706 !important;
+    color: #fff !important;
+    box-shadow: 0 0 10px rgba(217, 119, 6, 0.6) !important;
+}
+
+#kioskCard.kiosk-fullscreen-mode .btn-check:checked + .btn-outline-info {
+    background-color: #0891b2 !important;
+    border-color: #0891b2 !important;
+    color: #fff !important;
+    box-shadow: 0 0 10px rgba(8, 145, 178, 0.6) !important;
+}
+
 #kioskCard.kiosk-fullscreen-mode #btnToggleScanner,
 #kioskCard.kiosk-fullscreen-mode #btnFullscreen {
     background: rgba(255, 255, 255, 0.2) !important;
@@ -213,18 +227,28 @@ body.kiosk-active-fullscreen {
                     <span class="text-muted small fw-semibold me-1"><i class="bi bi-toggles me-1"></i>Mode:</span>
                     <div class="btn-group btn-group-sm" role="group" id="punchModeGroup">
                         <input type="radio" class="btn-check" name="punchMode" id="modeAuto" value="auto" checked>
-                        <label class="btn btn-outline-primary fw-semibold px-2 px-sm-3" for="modeAuto" title="Automatically punches IN or OUT depending on schedule & status">
+                        <label class="btn btn-outline-primary fw-semibold px-2 px-sm-3" for="modeAuto" title="Automatically punches IN, LUNCH, or OUT depending on schedule & status">
                             <i class="bi bi-magic me-1"></i> Auto Detect
                         </label>
 
                         <input type="radio" class="btn-check" name="punchMode" id="modeCheckIn" value="check_in">
                         <label class="btn btn-outline-success fw-semibold px-2 px-sm-3" for="modeCheckIn" title="Punch In only for stepping up employees">
-                            <i class="bi bi-box-arrow-in-right me-1"></i> Punch In
+                            <i class="bi bi-box-arrow-in-right me-1"></i> Check In
+                        </label>
+
+                        <input type="radio" class="btn-check" name="punchMode" id="modeLunchOut" value="lunch_out">
+                        <label class="btn btn-outline-warning fw-semibold px-2 px-sm-3" for="modeLunchOut" title="Punch Out for Lunch Break">
+                            <i class="bi bi-cup-hot me-1"></i> Lunch Out
+                        </label>
+
+                        <input type="radio" class="btn-check" name="punchMode" id="modeLunchIn" value="lunch_in">
+                        <label class="btn btn-outline-info fw-semibold px-2 px-sm-3" for="modeLunchIn" title="Punch In when returning from Lunch Break">
+                            <i class="bi bi-arrow-return-right me-1"></i> Lunch In
                         </label>
 
                         <input type="radio" class="btn-check" name="punchMode" id="modeCheckOut" value="check_out">
                         <label class="btn btn-outline-danger fw-semibold px-2 px-sm-3" for="modeCheckOut" title="Punch Out / Departure only">
-                            <i class="bi bi-box-arrow-right me-1"></i> Punch Out
+                            <i class="bi bi-box-arrow-right me-1"></i> Check Out
                         </label>
                     </div>
                 </div>
@@ -388,11 +412,24 @@ body.kiosk-active-fullscreen {
                             </div>
                         </div>
 
-                        <!-- Side-by-Side Punch In & Out Badges Right -->
+                        <!-- Side-by-Side Punch In, Lunch & Out Badges Right -->
                         <div class="d-flex align-items-center gap-1 flex-shrink-0">
                             <!-- Punch In with Time -->
                             <span class="badge bg-success-subtle text-success border border-success-subtle font-monospace px-2 py-1 punch-in-badge" style="font-size: 0.72rem;" title="Punch In: {{ punch.check_in_time|date:'h:i A' }}">
                                 <i class="bi bi-box-arrow-in-right me-1"></i>{{ punch.check_in_time|date:"h:i A"|default:"--:--" }}
+                            </span>
+
+                            <!-- Lunch Break Badge -->
+                            <span class="lunch-badge-container">
+                                {% if punch.lunch_start_time and punch.lunch_end_time %}
+                                    <span class="badge bg-warning-subtle text-dark border border-warning-subtle font-monospace px-2 py-1 lunch-badge" style="font-size: 0.72rem;" title="Lunch Break: {{ punch.lunch_start_time|date:'h:i A' }} - {{ punch.lunch_end_time|date:'h:i A' }} ({{ punch.total_lunch_duration_minutes }}m)">
+                                        <i class="bi bi-cup-hot me-1 text-warning"></i>{{ punch.lunch_start_time|date:"h:i A" }}
+                                    </span>
+                                {% elif punch.lunch_start_time %}
+                                    <span class="badge bg-warning text-dark font-monospace px-2 py-1 lunch-badge" style="font-size: 0.72rem;" title="On Lunch since {{ punch.lunch_start_time|date:'h:i A' }}">
+                                        <i class="bi bi-cup-hot-fill me-1"></i>Lunch...
+                                    </span>
+                                {% endif %}
                             </span>
 
                             <!-- Punch Out: Remains Blank / Dashed until punch out occurs -->
@@ -401,7 +438,7 @@ body.kiosk-active-fullscreen {
                                     <i class="bi bi-box-arrow-right me-1"></i>{{ punch.check_out_time|date:"h:i A" }}
                                 </span>
                             {% else %}
-                                <span class="badge bg-light text-muted border border-dashed font-monospace px-2 py-1 punch-out-badge" style="font-size: 0.72rem; min-width: 65px; text-align: center;" title="Punch Out Pending">
+                                <span class="badge bg-light text-muted border border-dashed font-monospace px-2 py-1 punch-out-badge" style="font-size: 0.72rem; min-width: 55px; text-align: center;" title="Punch Out Pending">
                                     &mdash;&mdash;
                                 </span>
                             {% endif %}
@@ -508,6 +545,12 @@ document.addEventListener('DOMContentLoaded', function () {
         if (activePunchMode === 'check_in') {
             hudMode.className = 'badge bg-dark bg-opacity-75 border border-success text-success font-monospace px-2 py-1';
             hudMode.innerHTML = `<i class="bi bi-box-arrow-in-right me-1"></i> ${camLabel} &bull; PUNCH IN`;
+        } else if (activePunchMode === 'lunch_out') {
+            hudMode.className = 'badge bg-dark bg-opacity-75 border border-warning text-warning font-monospace px-2 py-1';
+            hudMode.innerHTML = `<i class="bi bi-cup-hot me-1"></i> ${camLabel} &bull; LUNCH OUT`;
+        } else if (activePunchMode === 'lunch_in') {
+            hudMode.className = 'badge bg-dark bg-opacity-75 border border-info text-info font-monospace px-2 py-1';
+            hudMode.innerHTML = `<i class="bi bi-arrow-return-right me-1"></i> ${camLabel} &bull; LUNCH IN`;
         } else if (activePunchMode === 'check_out') {
             hudMode.className = 'badge bg-dark bg-opacity-75 border border-danger text-danger font-monospace px-2 py-1';
             hudMode.innerHTML = `<i class="bi bi-box-arrow-right me-1"></i> ${camLabel} &bull; PUNCH OUT`;
@@ -739,10 +782,14 @@ document.addEventListener('DOMContentLoaded', function () {
                 return;
             }
 
-            // Scenario 4: Already checked in / on duty / in cooldown
-            if (data.in_cooldown || data.punch_type === 'on_duty' || data.punch_type === 'already_in' || data.punch_type === 'already_out') {
+            // Scenario 4: Already checked in / on duty / in cooldown / lunch status
+            if (data.in_cooldown || data.punch_type === 'on_duty' || data.punch_type === 'already_in' || data.punch_type === 'already_out' || data.punch_type === 'already_on_lunch' || data.punch_type === 'lunch_completed' || data.punch_type === 'no_lunch_out') {
                 showMatchFeedback(data);
-                hudStatus.innerText = (data.punch_type === 'on_duty') ? 'ON DUTY' : 'COOLDOWN';
+                let statusLabel = 'COOLDOWN';
+                if (data.punch_type === 'on_duty') statusLabel = 'ON DUTY';
+                else if (data.punch_type === 'already_on_lunch') statusLabel = 'ON LUNCH';
+                else if (data.punch_type === 'lunch_completed') statusLabel = 'LUNCH DONE';
+                hudStatus.innerText = statusLabel;
                 hudStatus.className = 'badge bg-info text-dark font-monospace';
                 hudMsg.innerText = data.message;
                 return;
@@ -770,23 +817,60 @@ document.addEventListener('DOMContentLoaded', function () {
         if (data.punch_logged) {
             playTone('success');
             const isCheckIn = data.punch_type === 'check_in';
+            const isLunchOut = data.punch_type === 'lunch_out';
+            const isLunchIn = data.punch_type === 'lunch_in';
+            const isCheckOut = data.punch_type === 'check_out';
+
+            let titleText = 'Punch Verified!';
+            let badgeClass = 'bg-primary';
+            let badgeText = 'PUNCH';
+            let iconHtml = '<i class="bi bi-check-circle-fill fs-1 text-success flex-shrink-0"></i>';
+            let alertClass = 'alert-success';
+
+            if (isCheckIn) {
+                titleText = 'Check-In Verified!';
+                badgeClass = 'bg-success';
+                badgeText = 'PUNCH IN';
+                iconHtml = '<i class="bi bi-box-arrow-in-right fs-1 text-success flex-shrink-0"></i>';
+                alertClass = 'alert-success';
+            } else if (isLunchOut) {
+                titleText = 'Lunch Break Started!';
+                badgeClass = 'bg-warning text-dark';
+                badgeText = 'LUNCH OUT';
+                iconHtml = '<i class="bi bi-cup-hot-fill fs-1 text-warning flex-shrink-0"></i>';
+                alertClass = 'alert-warning';
+            } else if (isLunchIn) {
+                titleText = 'Lunch Break Ended!';
+                badgeClass = 'bg-info text-dark';
+                badgeText = 'LUNCH IN';
+                iconHtml = '<i class="bi bi-arrow-return-right fs-1 text-info flex-shrink-0"></i>';
+                alertClass = 'alert-info';
+            } else if (isCheckOut) {
+                titleText = 'Check-Out Verified!';
+                badgeClass = 'bg-primary';
+                badgeText = 'PUNCH OUT';
+                iconHtml = '<i class="bi bi-box-arrow-right fs-1 text-primary flex-shrink-0"></i>';
+                alertClass = 'alert-success';
+            }
+
             matchResultBox.innerHTML = `
-                <div class="alert alert-success mb-0 d-flex align-items-center gap-3 shadow-sm border-0" style="border-radius: 12px;">
-                    <i class="bi bi-check-circle-fill fs-1 text-success flex-shrink-0"></i>
+                <div class="alert ${alertClass} mb-0 d-flex align-items-center gap-3 shadow-sm border-0" style="border-radius: 12px;">
+                    ${iconHtml}
                     <div class="min-w-0 flex-grow-1">
                         <div class="d-flex align-items-center gap-2">
-                            <span class="fw-bold fs-5 text-success">${isCheckIn ? 'Check-In Verified!' : 'Check-Out Verified!'}</span>
-                            <span class="badge ${isCheckIn ? 'bg-success' : 'bg-primary'}">${isCheckIn ? 'PUNCH IN' : 'PUNCH OUT'}</span>
+                            <span class="fw-bold fs-5">${titleText}</span>
+                            <span class="badge ${badgeClass}">${badgeText}</span>
                         </div>
                         <div class="text-dark fw-bold fs-6 mt-1">${data.employee_name} &bull; <span class="font-monospace text-secondary">${data.employee_id}</span></div>
                         <div class="small text-muted mt-1 d-flex flex-wrap gap-1 align-items-center">
-                            <span class="badge bg-success-subtle text-success border border-success-subtle"><i class="bi bi-clock me-1"></i>${data.time_exact || data.time}</span>
+                            <span class="badge bg-dark bg-opacity-10 text-dark border"><i class="bi bi-clock me-1"></i>${data.time_exact || data.time}</span>
                             <span class="badge bg-light text-dark border">${data.department || 'General'}</span>
                             <span class="badge bg-primary-subtle text-primary border border-primary-subtle">${data.confidence}% Match</span>
+                            ${data.total_lunch_duration_minutes ? `<span class="badge bg-warning-subtle text-dark border border-warning-subtle">${data.total_lunch_duration_minutes}m lunch</span>` : ''}
                             ${data.working_hours && data.working_hours !== '0.00' ? `<span class="badge bg-info-subtle text-info border border-info-subtle">${data.working_hours} hrs worked</span>` : ''}
                         </div>
                     </div>
-                    ${data.photo_url ? `<img src="${data.photo_url}" class="rounded-circle border border-2 border-success flex-shrink-0" style="width: 54px; height: 54px; object-fit: cover;" alt="${data.employee_name}">` : ''}
+                    ${data.photo_url ? `<img src="${data.photo_url}" class="rounded-circle border border-2 border-primary flex-shrink-0" style="width: 54px; height: 54px; object-fit: cover;" alt="${data.employee_name}">` : ''}
                 </div>
             `;
             // Auto hide result box after 4 seconds so terminal stays clean
@@ -819,12 +903,28 @@ document.addEventListener('DOMContentLoaded', function () {
             `;
             resultBoxTimeout = setTimeout(() => { matchResultBox.style.display = 'none'; }, 3500);
 
-        } else if (data.in_cooldown || data.punch_type === 'on_duty' || data.punch_type === 'already_in' || data.punch_type === 'already_out') {
+        } else if (data.in_cooldown || data.punch_type === 'on_duty' || data.punch_type === 'already_in' || data.punch_type === 'already_out' || data.punch_type === 'already_on_lunch' || data.punch_type === 'lunch_completed' || data.punch_type === 'no_lunch_out') {
+            let noticeTitle = 'Cooldown Active';
+            let alertType = 'alert-info';
+            let iconClass = 'bi-info-circle-fill text-info';
+            if (data.punch_type === 'on_duty') {
+                noticeTitle = 'Currently On Duty';
+            } else if (data.punch_type === 'already_on_lunch') {
+                noticeTitle = 'Currently On Lunch Break';
+                alertType = 'alert-warning';
+                iconClass = 'bi-cup-hot-fill text-warning';
+            } else if (data.punch_type === 'lunch_completed') {
+                noticeTitle = 'Lunch Break Completed';
+            } else if (data.punch_type === 'no_lunch_out') {
+                noticeTitle = 'Lunch In Not Available';
+                alertType = 'alert-warning';
+                iconClass = 'bi-exclamation-triangle-fill text-warning';
+            }
             matchResultBox.innerHTML = `
-                <div class="alert alert-info mb-0 d-flex align-items-center gap-3 shadow-sm border-0" style="border-radius: 12px;">
-                    <i class="bi bi-info-circle-fill fs-2 text-info flex-shrink-0"></i>
+                <div class="alert ${alertType} mb-0 d-flex align-items-center gap-3 shadow-sm border-0" style="border-radius: 12px;">
+                    <i class="bi ${iconClass} fs-2 flex-shrink-0"></i>
                     <div>
-                        <div class="fw-bold text-dark">${data.employee_name} &bull; ${data.punch_type === 'on_duty' ? 'Currently On Duty' : 'Cooldown Active'}</div>
+                        <div class="fw-bold text-dark">${data.employee_name} &bull; ${noticeTitle}</div>
                         <div class="small text-muted mt-1">${data.message}</div>
                     </div>
                 </div>
@@ -864,6 +964,16 @@ document.addEventListener('DOMContentLoaded', function () {
                 outBadge.title = `Punch Out: ${outTime || data.time_exact || data.time}`;
             }
 
+            // Update lunch badge if lunch data present
+            const lunchContainer = card.querySelector('.lunch-badge-container');
+            if (lunchContainer) {
+                if (data.lunch_start_time && data.lunch_end_time) {
+                    lunchContainer.innerHTML = `<span class="badge bg-warning-subtle text-dark border border-warning-subtle font-monospace px-2 py-1 lunch-badge" style="font-size: 0.72rem;" title="Lunch: ${data.lunch_start_time} - ${data.lunch_end_time} (${data.total_lunch_duration_minutes}m)"><i class="bi bi-cup-hot me-1 text-warning"></i>${data.lunch_start_time}</span>`;
+                } else if (data.lunch_start_time) {
+                    lunchContainer.innerHTML = `<span class="badge bg-warning text-dark font-monospace px-2 py-1 lunch-badge" style="font-size: 0.72rem;" title="On Lunch since ${data.lunch_start_time}"><i class="bi bi-cup-hot-fill me-1"></i>Lunch...</span>`;
+                }
+            }
+
             // Visual feedback flash
             card.classList.add('bg-warning-subtle');
             setTimeout(() => card.classList.remove('bg-warning-subtle'), 1500);
@@ -885,6 +995,13 @@ document.addEventListener('DOMContentLoaded', function () {
                 ? `<span class="badge bg-primary-subtle text-primary border border-primary-subtle font-monospace px-2 py-1 punch-out-badge" style="font-size: 0.72rem;" title="Punch Out: ${outTime || data.time_exact || data.time}"><i class="bi bi-box-arrow-right me-1"></i>${outTime || data.time_exact || data.time}</span>`
                 : `<span class="badge bg-light text-muted border border-dashed font-monospace px-2 py-1 punch-out-badge" style="font-size: 0.72rem; min-width: 65px; text-align: center;" title="Punch Out Pending">&mdash;&mdash;</span>`;
 
+            let lunchHtml = '<span class="lunch-badge-container"></span>';
+            if (data.lunch_start_time && data.lunch_end_time) {
+                lunchHtml = `<span class="lunch-badge-container"><span class="badge bg-warning-subtle text-dark border border-warning-subtle font-monospace px-2 py-1 lunch-badge" style="font-size: 0.72rem;" title="Lunch: ${data.lunch_start_time} - ${data.lunch_end_time} (${data.total_lunch_duration_minutes}m)"><i class="bi bi-cup-hot me-1 text-warning"></i>${data.lunch_start_time}</span></span>`;
+            } else if (data.lunch_start_time) {
+                lunchHtml = `<span class="lunch-badge-container"><span class="badge bg-warning text-dark font-monospace px-2 py-1 lunch-badge" style="font-size: 0.72rem;" title="On Lunch since ${data.lunch_start_time}"><i class="bi bi-cup-hot-fill me-1"></i>Lunch...</span></span>`;
+            }
+
             card.innerHTML = `
                 <div class="d-flex justify-content-between align-items-center gap-2">
                     <div class="d-flex align-items-center gap-2 min-w-0">
@@ -904,6 +1021,7 @@ document.addEventListener('DOMContentLoaded', function () {
                         <span class="badge bg-success-subtle text-success border border-success-subtle font-monospace px-2 py-1 punch-in-badge" style="font-size: 0.72rem;" title="Punch In: ${inTime}">
                             <i class="bi bi-box-arrow-in-right me-1"></i>${inTime}
                         </span>
+                        ${lunchHtml}
                         ${outHtml}
                     </div>
                 </div>

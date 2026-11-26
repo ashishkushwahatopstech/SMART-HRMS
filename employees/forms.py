@@ -56,6 +56,8 @@ class EmployeeForm(forms.ModelForm):
             'working_hours_per_day',
             'assigned_shift',
             'assigned_shift_name',
+            'lunch_start_time',
+            'lunch_end_time',
             'address',
             'emergency_contact_name',
             'emergency_contact_phone',
@@ -81,6 +83,8 @@ class EmployeeForm(forms.ModelForm):
             'working_hours_per_day': forms.NumberInput(attrs={'class': 'form-control', 'id': 'id_working_hours_per_day', 'step': '0.25', 'min': '1', 'max': '24'}),
             'assigned_shift': forms.Select(attrs={'class': 'form-select', 'id': 'id_assigned_shift'}),
             'assigned_shift_name': forms.HiddenInput(attrs={'id': 'id_assigned_shift_name'}),
+            'lunch_start_time': forms.TimeInput(attrs={'class': 'form-control', 'type': 'time', 'id': 'id_lunch_start_time'}),
+            'lunch_end_time': forms.TimeInput(attrs={'class': 'form-control', 'type': 'time', 'id': 'id_lunch_end_time'}),
             'address': forms.Textarea(attrs={'class': 'form-control', 'rows': 2, 'placeholder': 'Residential address...'}),
             'emergency_contact_name': forms.TextInput(attrs={'class': 'form-control', 'placeholder': 'Emergency Contact Person'}),
             'emergency_contact_phone': forms.TextInput(attrs={'class': 'form-control', 'placeholder': 'Emergency Contact Number'}),
@@ -176,13 +180,17 @@ class EmployeeForm(forms.ModelForm):
             if company and manager.company != company:
                 self.add_error('manager', "Reporting manager must belong to the same company.")
 
-        # Auto-synchronize assigned shift name and default hours if not explicitly modified
+        # Auto-synchronize assigned shift name, hours, and default lunch schedule
         assigned_shift = cleaned_data.get('assigned_shift')
         if assigned_shift:
             if not cleaned_data.get('assigned_shift_name'):
                 cleaned_data['assigned_shift_name'] = f"{assigned_shift.name} ({assigned_shift.start_time.strftime('%I:%M %p')} - {assigned_shift.end_time.strftime('%I:%M %p')})"
             if not cleaned_data.get('working_hours_per_day') or cleaned_data.get('working_hours_per_day') == Decimal('0.00'):
                 cleaned_data['working_hours_per_day'] = assigned_shift.total_expected_hours or Decimal('8.00')
+            if not cleaned_data.get('lunch_start_time') and assigned_shift.lunch_start_time:
+                cleaned_data['lunch_start_time'] = assigned_shift.lunch_start_time
+            if not cleaned_data.get('lunch_end_time') and assigned_shift.lunch_end_time:
+                cleaned_data['lunch_end_time'] = assigned_shift.lunch_end_time
 
         # Auto-assign next incremental Employee ID if empty
         if not cleaned_data.get('employee_id'):

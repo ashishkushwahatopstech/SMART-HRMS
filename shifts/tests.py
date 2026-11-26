@@ -27,6 +27,19 @@ class ShiftCalculationAndModelTests(TestCase):
         # Net hours: 8.00 - (75 / 60 = 1.25) = 6.75
         self.assertEqual(shift.calculate_net_working_hours(), Decimal('6.75'))
 
+    def test_shift_lunch_timings_and_duration_sync(self):
+        shift = Shift.objects.create(
+            company=self.company,
+            name='Lunch Sync Shift',
+            start_time=time(9, 0),
+            end_time=time(18, 0),
+            lunch_start_time=time(13, 0),
+            lunch_end_time=time(14, 0),
+        )
+        self.assertEqual(shift.lunch_start_time, time(13, 0))
+        self.assertEqual(shift.lunch_end_time, time(14, 0))
+        self.assertEqual(shift.lunch_duration_minutes, 60)
+
     def test_12_hour_shift_calculation(self):
         shift = Shift.objects.create(
             company=self.company,

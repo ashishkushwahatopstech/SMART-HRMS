@@ -240,3 +240,43 @@ class EmployeeModuleTests(TestCase):
         self.assertIn(mgr_emp.pk, mgr_ids)
         self.assertNotIn(self.employee1.pk, mgr_ids)
         self.assertNotIn(self.hr_emp.pk, mgr_ids)
+
+    def test_employee_lunch_schedule_inheritance_and_override(self):
+        from shifts.models import Shift
+        from datetime import time
+        shift = Shift.objects.create(
+            company=self.company_a,
+            name='Regular Shift',
+            start_time=time(9, 0),
+            end_time=time(18, 0),
+            lunch_start_time=time(13, 0),
+            lunch_end_time=time(14, 0),
+        )
+        # 1. Inherits default lunch from shift
+        emp1 = Employee.objects.create(
+            employee_id='ALPHA-EMP9991',
+            company=self.company_a,
+            first_name='Auto',
+            last_name='Lunch',
+            email='autolunch@test.com',
+            phone='1234567890',
+            assigned_shift=shift,
+        )
+        self.assertEqual(emp1.lunch_start_time, time(13, 0))
+        self.assertEqual(emp1.lunch_end_time, time(14, 0))
+
+        # 2. Custom modified lunch time per employee
+        emp2 = Employee.objects.create(
+            employee_id='ALPHA-EMP9992',
+            company=self.company_a,
+            first_name='Custom',
+            last_name='Lunch',
+            email='customlunch@test.com',
+            phone='1234567891',
+            assigned_shift=shift,
+            lunch_start_time=time(12, 30),
+            lunch_end_time=time(13, 15),
+        )
+        self.assertEqual(emp2.lunch_start_time, time(12, 30))
+        self.assertEqual(emp2.lunch_end_time, time(13, 15))
+

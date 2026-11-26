@@ -1170,8 +1170,9 @@ def api_recognize_face(request):
         # SCENARIO A: Employee has NOT punched in yet today
         # ----------------------------------------------------
         if not att:
-            # If explicit punch out was requested but employee has not checked in:
-            if punch_mode in ['check_out', 'early_out', 'force_out']:
+            # If explicit punch out or lunch was requested but employee has not checked in:
+            if punch_mode in ['check_out', 'early_out', 'force_out', 'lunch_out', 'lunch_in']:
+                action_name = "check out" if 'out' in punch_mode else "record lunch"
                 return JsonResponse({
                     'matched': True,
                     'access_granted': True,
@@ -1185,7 +1186,7 @@ def api_recognize_face(request):
                     'time': time_display,
                     'time_exact': time_exact_display,
                     'photo_url': photo_url,
-                    'message': f"CANNOT CHECK OUT: {employee.get_full_name()} has not punched in yet today. Please punch in first.",
+                    'message': f"CANNOT PROCEED: {employee.get_full_name()} has not punched in yet today. Please punch in first.",
                     'box': box,
                     'frame_dims': frame_dims,
                     'confidence': confidence,
@@ -1234,106 +1235,318 @@ def api_recognize_face(request):
         # SCENARIO B: Employee is checked in, NOT checked out
         # ----------------------------------------------------
         elif not att.check_out_time:
-            # If explicit punch in was requested but employee is already checked in:
-            if punch_mode == 'check_in':
-                return JsonResponse({
-                    'matched': True,
-                    'access_granted': True,
-                    'security_status': 'AUTHORIZED',
-                    'in_cooldown': True,
-                    'punch_logged': False,
-                    'punch_type': 'already_in',
-                    'employee_id': employee.employee_id,
-                    'employee_name': employee.get_full_name(),
-                    'department': employee.department.name if employee.department else 'General',
-                    'designation': employee.designation.title if employee.designation else '',
-                    'time': format_dt(att.check_in_time),
-                    'time_exact': format_dt(att.check_in_time, with_seconds=True),
-                    'photo_url': photo_url,
-                    'message': f"ALREADY CHECKED IN: {employee.get_full_name()} is already checked in at {format_dt(att.check_in_time)}.",
-                    'box': box,
-                    'frame_dims': frame_dims,
-                    'confidence': confidence,
-                    'working_hours': str(att.total_working_hours),
-                })
-            time_since_in = (now - att.check_in_time).total_seconds()
+            # 1. Explicit Lunch Out
+            if punch_mode == 'lunch_out':
+                if att.lunch_start_time and not att.lunch_end_time:
+                    return JsonResponse({
+                        'matched': True,
+                        'access_granted': True,
+                        'security_status': 'AUTHORIZED',
+                        'in_cooldown': True,
+                        'punch_logged': False,
+                        'punch_type': 'already_on_lunch',
+                        'employee_id': employee.employee_id,
+                        'employee_name': employee.get_full_name(),
+                        'department': employee.department.name if employee.department else 'General',
+                        'designation': employee.designation.title if employee.designation else '',
+                        'time': format_dt(att.lunch_start_time),
+                        'time_exact': format_dt(att.lunch_start_time, with_seconds=True),
+                        'photo_url': photo_url,
+                        'message': f"ALREADY ON LUNCH: {employee.get_full_name()} departed for lunch at {format_dt(att.lunch_start_time)}. Switch to Lunch In when returning.",
+                        'box': box,
+                        'frame_dims': frame_dims,
+                        'confidence': confidence,
+                    })
+                elif att.lunch_start_time and att.lunch_end_time:
+                    return JsonResponse({
+                        'matched': True,
+                        'access_granted': True,
+                        'security_status': 'AUTHORIZED',
+                        'in_cooldown': True,
+                        'punch_logged': False,
+                        'punch_type': 'lunch_completed',
+                        'employee_id': employee.employee_id,
+                        'employee_name': employee.get_full_name(),
+                        'department': employee.department.name if employee.department else 'General',
+                        'designation': employee.designation.title if employee.designation else '',
+                        'time': format_dt(att.lunch_end_time),
+                        'time_exact': format_dt(att.lunch_end_time, with_seconds=True),
+                        'photo_url': photo_url,
+                        'message': f"LUNCH ALREADY COMPLETED: Break completed today ({att.total_lunch_duration_minutes} mins). Resumed at {format_dt(att.lunch_end_time)}.",
+                        'box': box,
+                        'frame_dims': frame_dims,
+                        'confidence': confidence,
+                    })
 
-            # Anti-bounce (15s in auto mode, 3s if explicit checkout requested)
-            min_anti_bounce = 3 if punch_mode in ['check_out', 'early_out', 'force_out'] else 15
-            if time_since_in < min_anti_bounce:
-                return JsonResponse({
-                    'matched': True,
-                    'access_granted': True,
-                    'security_status': 'AUTHORIZED',
-                    'in_cooldown': True,
-                    'punch_logged': False,
-                    'punch_type': 'already_in',
-                    'employee_id': employee.employee_id,
-                    'employee_name': employee.get_full_name(),
-                    'department': employee.department.name if employee.department else 'General',
-                    'designation': employee.designation.title if employee.designation else '',
-                    'time': format_dt(att.check_in_time),
-                    'time_exact': format_dt(att.check_in_time, with_seconds=True),
-                    'photo_url': photo_url,
-                    'message': f"COOLDOWN: Just checked in. Please wait a moment before checking out.",
-                    'box': box,
-                    'frame_dims': frame_dims,
-                    'confidence': confidence,
-                    'working_hours': '0.00',
-                })
-
-            # Check if current time is eligible for checkout:
-            # - Explicitly requested via checkout/early_out/force_out, OR
-            # - At or after checkout time (including up to and after 1 hour of checkout time), OR
-            # - Within 10 minutes prior to checkout time, OR
-            # - No assigned shift schedule
-            is_checkout_time = False
-            if punch_mode in ['check_out', 'early_out', 'force_out']:
-                is_checkout_time = True
-            elif shift and shift_end_dt:
-                if now >= (shift_end_dt - timedelta(minutes=10)):
-                    is_checkout_time = True
-            else:
-                is_checkout_time = True
-
-            if is_checkout_time:
-                # Check-Out action
-                att.check_out_time = now
+                # Record Lunch Out
+                att.lunch_start_time = now
                 att.verification_method = Attendance.VerificationMethod.FACE_RECOGNITION
                 att.save()
-                punch_type = 'check_out'
+                punch_type = 'lunch_out'
+                msg = f"LUNCH BREAK STARTED: Enjoy your meal, {employee.get_full_name()}! Lunch Out recorded at {time_display}."
 
-                ot_note = f" (Overtime: {att.overtime_hours} hrs)" if att.overtime_hours > Decimal('0.00') else ""
-                msg = f"PUNCH OUT VERIFIED: Goodbye, {employee.get_full_name()}! Check-Out recorded at {time_display} ({att.total_working_hours} hrs worked){ot_note}."
+            # 2. Explicit Lunch In
+            elif punch_mode == 'lunch_in':
+                if not att.lunch_start_time:
+                    return JsonResponse({
+                        'matched': True,
+                        'access_granted': True,
+                        'security_status': 'AUTHORIZED',
+                        'punch_logged': False,
+                        'punch_type': 'no_lunch_out',
+                        'employee_id': employee.employee_id,
+                        'employee_name': employee.get_full_name(),
+                        'department': employee.department.name if employee.department else 'General',
+                        'designation': employee.designation.title if employee.designation else '',
+                        'time': time_display,
+                        'time_exact': time_exact_display,
+                        'photo_url': photo_url,
+                        'message': f"CANNOT PUNCH LUNCH IN: No Lunch Out record found today for {employee.get_full_name()}. Please punch Lunch Out first.",
+                        'box': box,
+                        'frame_dims': frame_dims,
+                        'confidence': confidence,
+                    })
+                elif att.lunch_end_time:
+                    return JsonResponse({
+                        'matched': True,
+                        'access_granted': True,
+                        'security_status': 'AUTHORIZED',
+                        'in_cooldown': True,
+                        'punch_logged': False,
+                        'punch_type': 'lunch_completed',
+                        'employee_id': employee.employee_id,
+                        'employee_name': employee.get_full_name(),
+                        'department': employee.department.name if employee.department else 'General',
+                        'designation': employee.designation.title if employee.designation else '',
+                        'time': format_dt(att.lunch_end_time),
+                        'time_exact': format_dt(att.lunch_end_time, with_seconds=True),
+                        'photo_url': photo_url,
+                        'message': f"ALREADY RETURNED FROM LUNCH: Returned at {format_dt(att.lunch_end_time)} ({att.total_lunch_duration_minutes} mins).",
+                        'box': box,
+                        'frame_dims': frame_dims,
+                        'confidence': confidence,
+                    })
+
+                # Record Lunch In
+                att.lunch_end_time = now
+                att.verification_method = Attendance.VerificationMethod.FACE_RECOGNITION
+                att.save()
+                punch_type = 'lunch_in'
+                msg = f"LUNCH BREAK ENDED: Welcome back, {employee.get_full_name()}! Lunch In recorded at {time_display} ({att.total_lunch_duration_minutes} mins break)."
+
+            # 3. Explicit Check In when already checked in
+            elif punch_mode == 'check_in':
+                if att.lunch_start_time and not att.lunch_end_time:
+                    # On lunch: Checking in auto-completes lunch break
+                    att.lunch_end_time = now
+                    att.verification_method = Attendance.VerificationMethod.FACE_RECOGNITION
+                    att.save()
+                    punch_type = 'lunch_in'
+                    msg = f"LUNCH BREAK ENDED: Welcome back, {employee.get_full_name()}! Lunch In recorded at {time_display} ({att.total_lunch_duration_minutes} mins break)."
+                else:
+                    return JsonResponse({
+                        'matched': True,
+                        'access_granted': True,
+                        'security_status': 'AUTHORIZED',
+                        'in_cooldown': True,
+                        'punch_logged': False,
+                        'punch_type': 'already_in',
+                        'employee_id': employee.employee_id,
+                        'employee_name': employee.get_full_name(),
+                        'department': employee.department.name if employee.department else 'General',
+                        'designation': employee.designation.title if employee.designation else '',
+                        'time': format_dt(att.check_in_time),
+                        'time_exact': format_dt(att.check_in_time, with_seconds=True),
+                        'photo_url': photo_url,
+                        'message': f"ALREADY CHECKED IN: {employee.get_full_name()} is already checked in at {format_dt(att.check_in_time)}.",
+                        'box': box,
+                        'frame_dims': frame_dims,
+                        'confidence': confidence,
+                        'working_hours': str(att.total_working_hours),
+                    })
+
+            # 4. Check Out or Auto Detect
             else:
-                # Within shift hours (before checkout time): Keep employee ON DUTY, do not punch out accidentally
-                return JsonResponse({
-                    'matched': True,
-                    'access_granted': True,
-                    'security_status': 'AUTHORIZED',
-                    'in_cooldown': True,
-                    'punch_logged': False,
-                    'punch_type': 'on_duty',
-                    'employee_id': employee.employee_id,
-                    'employee_name': employee.get_full_name(),
-                    'department': employee.department.name if employee.department else 'General',
-                    'designation': employee.designation.title if employee.designation else '',
-                    'time': format_dt(att.check_in_time),
-                    'time_exact': format_dt(att.check_in_time, with_seconds=True),
-                    'photo_url': photo_url,
-                    'message': f"CURRENTLY ON DUTY: Checked in at {format_dt(att.check_in_time)}. Shift checkout: {shift.end_time.strftime('%I:%M %p')}.",
-                    'box': box,
-                    'frame_dims': frame_dims,
-                    'confidence': confidence,
-                    'working_hours': str(att.total_working_hours),
-                    'shift_name': shift_name,
-                    'shift_end': shift.end_time.strftime('%I:%M %p'),
-                })
+                time_since_in = (now - att.check_in_time).total_seconds()
+                min_anti_bounce = 3 if punch_mode in ['check_out', 'early_out', 'force_out'] else 15
+                if time_since_in < min_anti_bounce:
+                    return JsonResponse({
+                        'matched': True,
+                        'access_granted': True,
+                        'security_status': 'AUTHORIZED',
+                        'in_cooldown': True,
+                        'punch_logged': False,
+                        'punch_type': 'already_in',
+                        'employee_id': employee.employee_id,
+                        'employee_name': employee.get_full_name(),
+                        'department': employee.department.name if employee.department else 'General',
+                        'designation': employee.designation.title if employee.designation else '',
+                        'time': format_dt(att.check_in_time),
+                        'time_exact': format_dt(att.check_in_time, with_seconds=True),
+                        'photo_url': photo_url,
+                        'message': f"COOLDOWN: Just checked in. Please wait a moment before checking out.",
+                        'box': box,
+                        'frame_dims': frame_dims,
+                        'confidence': confidence,
+                        'working_hours': '0.00',
+                    })
+
+                # Auto Mode Subcase A: Currently on lunch break -> Auto marks LUNCH IN!
+                if punch_mode == 'auto' and att.lunch_start_time and not att.lunch_end_time:
+                    time_since_lunch_out = (now - att.lunch_start_time).total_seconds()
+                    if time_since_lunch_out < 10:
+                        return JsonResponse({
+                            'matched': True,
+                            'access_granted': True,
+                            'security_status': 'AUTHORIZED',
+                            'in_cooldown': True,
+                            'punch_logged': False,
+                            'punch_type': 'already_on_lunch',
+                            'employee_id': employee.employee_id,
+                            'employee_name': employee.get_full_name(),
+                            'department': employee.department.name if employee.department else 'General',
+                            'designation': employee.designation.title if employee.designation else '',
+                            'time': format_dt(att.lunch_start_time),
+                            'time_exact': format_dt(att.lunch_start_time, with_seconds=True),
+                            'photo_url': photo_url,
+                            'message': f"COOLDOWN: Just departed for lunch. Enjoy your meal!",
+                            'box': box,
+                            'frame_dims': frame_dims,
+                            'confidence': confidence,
+                        })
+                    att.lunch_end_time = now
+                    att.verification_method = Attendance.VerificationMethod.FACE_RECOGNITION
+                    att.save()
+                    punch_type = 'lunch_in'
+                    msg = f"LUNCH BREAK ENDED: Welcome back, {employee.get_full_name()}! Lunch In recorded at {time_display} ({att.total_lunch_duration_minutes} mins break)."
+
+                # Auto Mode Subcase B: Has not taken lunch today -> Check if in lunch window
+                elif punch_mode == 'auto' and not att.lunch_start_time:
+                    emp_lunch_start = employee.lunch_start_time or (shift.lunch_start_time if shift else None) or time(13, 0)
+                    emp_lunch_end = employee.lunch_end_time or (shift.lunch_end_time if shift else None) or time(14, 0)
+
+                    lunch_start_dt = timezone.make_aware(datetime.combine(today, emp_lunch_start), tz) if tz else datetime.combine(today, emp_lunch_start)
+                    lunch_end_dt = timezone.make_aware(datetime.combine(today, emp_lunch_end), tz) if tz else datetime.combine(today, emp_lunch_end)
+
+                    in_lunch_window = (now >= (lunch_start_dt - timedelta(minutes=15))) and (now <= (lunch_end_dt + timedelta(minutes=30)))
+                    is_near_shift_end = shift_end_dt and (now >= (shift_end_dt - timedelta(minutes=15)))
+
+                    if in_lunch_window and not is_near_shift_end:
+                        att.lunch_start_time = now
+                        att.verification_method = Attendance.VerificationMethod.FACE_RECOGNITION
+                        att.save()
+                        punch_type = 'lunch_out'
+                        msg = f"LUNCH BREAK STARTED: Enjoy your meal, {employee.get_full_name()}! Lunch Out recorded at {time_display}."
+                    else:
+                        is_checkout_time = False
+                        if shift and shift_end_dt:
+                            if now >= (shift_end_dt - timedelta(minutes=10)):
+                                is_checkout_time = True
+                        else:
+                            is_checkout_time = True
+
+                        if is_checkout_time:
+                            att.check_out_time = now
+                            att.verification_method = Attendance.VerificationMethod.FACE_RECOGNITION
+                            att.save()
+                            punch_type = 'check_out'
+                            ot_note = f" (Overtime: {att.overtime_hours} hrs)" if att.overtime_hours > Decimal('0.00') else ""
+                            msg = f"PUNCH OUT VERIFIED: Goodbye, {employee.get_full_name()}! Check-Out recorded at {time_display} ({att.total_working_hours} hrs worked){ot_note}."
+                        else:
+                            lunch_info = f" Lunch: {emp_lunch_start.strftime('%I:%M %p')}." if emp_lunch_start else ""
+                            return JsonResponse({
+                                'matched': True,
+                                'access_granted': True,
+                                'security_status': 'AUTHORIZED',
+                                'in_cooldown': True,
+                                'punch_logged': False,
+                                'punch_type': 'on_duty',
+                                'employee_id': employee.employee_id,
+                                'employee_name': employee.get_full_name(),
+                                'department': employee.department.name if employee.department else 'General',
+                                'designation': employee.designation.title if employee.designation else '',
+                                'time': format_dt(att.check_in_time),
+                                'time_exact': format_dt(att.check_in_time, with_seconds=True),
+                                'photo_url': photo_url,
+                                'message': f"CURRENTLY ON DUTY: Checked in at {format_dt(att.check_in_time)}.{lunch_info} Shift checkout: {shift.end_time.strftime('%I:%M %p') if shift else 'Open'}.",
+                                'box': box,
+                                'frame_dims': frame_dims,
+                                'confidence': confidence,
+                                'working_hours': str(att.total_working_hours),
+                                'shift_name': shift_name,
+                                'shift_end': shift.end_time.strftime('%I:%M %p') if shift else '',
+                            })
+
+                # Explicit Check Out or Auto mode after lunch completed
+                else:
+                    is_checkout_time = False
+                    if punch_mode in ['check_out', 'early_out', 'force_out']:
+                        is_checkout_time = True
+                    elif shift and shift_end_dt:
+                        if now >= (shift_end_dt - timedelta(minutes=10)):
+                            is_checkout_time = True
+                    else:
+                        is_checkout_time = True
+
+                    if is_checkout_time:
+                        if att.lunch_start_time and not att.lunch_end_time:
+                            att.lunch_end_time = now
+                        att.check_out_time = now
+                        att.verification_method = Attendance.VerificationMethod.FACE_RECOGNITION
+                        att.save()
+                        punch_type = 'check_out'
+                        ot_note = f" (Overtime: {att.overtime_hours} hrs)" if att.overtime_hours > Decimal('0.00') else ""
+                        msg = f"PUNCH OUT VERIFIED: Goodbye, {employee.get_full_name()}! Check-Out recorded at {time_display} ({att.total_working_hours} hrs worked){ot_note}."
+                    else:
+                        return JsonResponse({
+                            'matched': True,
+                            'access_granted': True,
+                            'security_status': 'AUTHORIZED',
+                            'in_cooldown': True,
+                            'punch_logged': False,
+                            'punch_type': 'on_duty',
+                            'employee_id': employee.employee_id,
+                            'employee_name': employee.get_full_name(),
+                            'department': employee.department.name if employee.department else 'General',
+                            'designation': employee.designation.title if employee.designation else '',
+                            'time': format_dt(att.check_in_time),
+                            'time_exact': format_dt(att.check_in_time, with_seconds=True),
+                            'photo_url': photo_url,
+                            'message': f"CURRENTLY ON DUTY: Checked in at {format_dt(att.check_in_time)}. Shift checkout: {shift.end_time.strftime('%I:%M %p') if shift else 'Open'}.",
+                            'box': box,
+                            'frame_dims': frame_dims,
+                            'confidence': confidence,
+                            'working_hours': str(att.total_working_hours),
+                            'shift_name': shift_name,
+                            'shift_end': shift.end_time.strftime('%I:%M %p') if shift else '',
+                        })
 
         # ----------------------------------------------------
         # SCENARIO C: Employee ALREADY checked out today
         # ----------------------------------------------------
         else:
+            if punch_mode in ['lunch_out', 'lunch_in']:
+                return JsonResponse({
+                    'matched': True,
+                    'access_granted': True,
+                    'security_status': 'AUTHORIZED',
+                    'in_cooldown': True,
+                    'punch_logged': False,
+                    'punch_type': 'already_out',
+                    'employee_id': employee.employee_id,
+                    'employee_name': employee.get_full_name(),
+                    'department': employee.department.name if employee.department else 'General',
+                    'designation': employee.designation.title if employee.designation else '',
+                    'time': format_dt(att.check_out_time),
+                    'time_exact': format_dt(att.check_out_time, with_seconds=True),
+                    'photo_url': photo_url,
+                    'message': f"ALREADY CHECKED OUT: Cannot record lunch punch after shift departure ({format_dt(att.check_out_time)}).",
+                    'box': box,
+                    'frame_dims': frame_dims,
+                    'confidence': confidence,
+                    'working_hours': str(att.total_working_hours),
+                })
+
             time_since_out = (now - att.check_out_time).total_seconds()
             if time_since_out < 15:
                 return JsonResponse({
@@ -1380,6 +1593,9 @@ def api_recognize_face(request):
             'time': time_display,
             'time_exact': time_exact_display,
             'check_in_time': format_dt(att.check_in_time) if att.check_in_time else time_display,
+            'lunch_start_time': format_dt(att.lunch_start_time) if att.lunch_start_time else None,
+            'lunch_end_time': format_dt(att.lunch_end_time) if att.lunch_end_time else None,
+            'total_lunch_duration_minutes': att.total_lunch_duration_minutes,
             'check_out_time': format_dt(att.check_out_time) if att.check_out_time else None,
             'date': local_now.strftime('%d %b %Y'),
             'confidence': confidence,

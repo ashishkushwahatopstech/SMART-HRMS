@@ -57,6 +57,11 @@ class Attendance(models.Model):
     check_in_time = models.DateTimeField(null=True, blank=True, help_text="Timestamp of employee check-in")
     check_out_time = models.DateTimeField(null=True, blank=True, help_text="Timestamp of employee check-out")
 
+    # Lunch Break Punches
+    lunch_start_time = models.DateTimeField(null=True, blank=True, help_text="Timestamp of employee departing for lunch (Lunch Out)")
+    lunch_end_time = models.DateTimeField(null=True, blank=True, help_text="Timestamp of employee returning from lunch (Lunch In)")
+    total_lunch_duration_minutes = models.PositiveSmallIntegerField(default=0, help_text="Actual lunch break taken in minutes")
+
     # Status & Method
     status = models.CharField(
         max_length=20,
@@ -110,10 +115,19 @@ class Attendance(models.Model):
         return f"{self.employee.get_full_name()} &mdash; {self.date} ({self.get_status_display()})"
 
     def calculate_hours(self):
-        """Calculates gross working hours and overtime hours against assigned shift."""
+        """Calculates gross working hours, lunch break deduction, and overtime hours against assigned shift."""
+        # Calculate actual recorded lunch duration if lunch punches exist
+        lunch_deduction_seconds = 0.0
+        if self.lunch_start_time and self.lunch_end_time and self.lunch_end_time > self.lunch_start_time:
+            lunch_deduction_seconds = (self.lunch_end_time - self.lunch_start_time).total_seconds()
+            self.total_lunch_duration_minutes = int(round(lunch_deduction_seconds / 60.0))
+        elif self.total_lunch_duration_minutes > 0:
+            lunch_deduction_seconds = float(self.total_lunch_duration_minutes * 60)
+
         if self.check_in_time and self.check_out_time:
-            diff_seconds = (self.check_out_time - self.check_in_time).total_seconds()
-            hours = max(0.0, diff_seconds / 3600.0)
+            gross_seconds = max(0.0, (self.check_out_time - self.check_in_time).total_seconds())
+            net_seconds = max(0.0, gross_seconds - lunch_deduction_seconds)
+            hours = max(0.0, net_seconds / 3600.0)
             self.total_working_hours = Decimal(str(round(hours, 2)))
 
             expected = Decimal('8.00')
@@ -232,6 +246,9 @@ class Attendance(models.Model):
             'status_label': self.get_status_display(),
             'shift': self.shift.name if self.shift else None,
             'check_in_time': self.check_in_time.strftime('%Y-%m-%d %H:%M:%S') if self.check_in_time else None,
+            'lunch_start_time': self.lunch_start_time.strftime('%Y-%m-%d %H:%M:%S') if self.lunch_start_time else None,
+            'lunch_end_time': self.lunch_end_time.strftime('%Y-%m-%d %H:%M:%S') if self.lunch_end_time else None,
+            'total_lunch_duration_minutes': self.total_lunch_duration_minutes,
             'check_out_time': self.check_out_time.strftime('%Y-%m-%d %H:%M:%S') if self.check_out_time else None,
             'total_working_hours': str(self.total_working_hours),
             'overtime_hours': str(self.overtime_hours),

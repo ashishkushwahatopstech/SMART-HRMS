@@ -76,6 +76,27 @@ class AttendanceCalculationAndPunctualityTests(TestCase):
         self.assertEqual(att.total_working_hours, Decimal('10.50'))
         self.assertEqual(att.overtime_hours, Decimal('2.50'))
 
+    def test_attendance_lunch_break_deduction(self):
+        """Working from 09:00 to 18:00 with 1 hour lunch (13:00 to 14:00) yields 8.00 net working hours."""
+        test_date = date(2026, 11, 24)
+        check_in = timezone.make_aware(datetime(2026, 11, 24, 9, 0))
+        lunch_out = timezone.make_aware(datetime(2026, 11, 24, 13, 0))
+        lunch_in = timezone.make_aware(datetime(2026, 11, 24, 14, 0))
+        check_out = timezone.make_aware(datetime(2026, 11, 24, 18, 0))
+
+        att = Attendance.objects.create(
+            employee=self.employee,
+            date=test_date,
+            check_in_time=check_in,
+            lunch_start_time=lunch_out,
+            lunch_end_time=lunch_in,
+            check_out_time=check_out
+        )
+        self.assertEqual(att.total_lunch_duration_minutes, 60)
+        # Gross = 9.00 hrs, Lunch = 1.00 hr, Net = 8.00 hrs
+        self.assertEqual(att.total_working_hours, Decimal('8.00'))
+        self.assertEqual(att.overtime_hours, Decimal('0.00'))
+
     def test_half_day_threshold(self):
         """Working 3.5 hours on an 8-hour shift (< 4h threshold) must be flagged as Half Day."""
         test_date = date(2026, 11, 24)
