@@ -649,8 +649,8 @@ document.addEventListener('DOMContentLoaded', function () {
         if (toggleScannerText) toggleScannerText.textContent = 'Resume';
     }
 
-    // 7. Clean Bounding Box Renderer (Accurately Mirrored on User Camera)
-    function drawBoundingBox(box, label, mode, frameDims) {
+    // 7. Clean Bounding Box Renderer (Primary Closest Face Focus + Background Bystander Tracking)
+    function drawBoundingBox(box, label, mode, frameDims, allFaces) {
         overlay.width = video.clientWidth;
         overlay.height = video.clientHeight;
         const ctx = overlay.getContext('2d');
@@ -663,20 +663,63 @@ document.addEventListener('DOMContentLoaded', function () {
         const scaleX = overlay.width / fW;
         const scaleY = overlay.height / fH;
 
+        // Draw background bystanders with subtle dashed boxes (ignored to prevent false triggers)
+        if (allFaces && allFaces.length > 1) {
+            allFaces.forEach(f => {
+                if (f.is_bystander && f.box) {
+                    const bw = f.box[2] * scaleX;
+                    const bh = f.box[3] * scaleY;
+                    const bx = (currentFacingMode === 'user')
+                        ? (overlay.width - (f.box[0] * scaleX + bw))
+                        : (f.box[0] * scaleX);
+                    const by = f.box[1] * scaleY;
+
+                    ctx.save();
+                    ctx.setLineDash([4, 4]);
+                    ctx.strokeStyle = 'rgba(148, 163, 184, 0.7)';
+                    ctx.lineWidth = 1.5;
+                    ctx.strokeRect(bx, by, bw, bh);
+
+                    ctx.fillStyle = 'rgba(148, 163, 184, 0.85)';
+                    ctx.font = '10px system-ui, sans-serif';
+                    ctx.fillText('👤 Bystander', bx + 4, Math.max(12, by - 4));
+                    ctx.restore();
+                }
+            });
+        }
+
+        // Draw Primary Closest Face Box
         const w = box[2] * scaleX;
         const h = box[3] * scaleY;
-        // Correct mirror horizontal offset so box tracks face naturally on mirrored camera
         const x = (currentFacingMode === 'user')
             ? (overlay.width - (box[0] * scaleX + w))
             : (box[0] * scaleX);
         const y = box[1] * scaleY;
 
         ctx.save();
-        ctx.strokeStyle = (mode === 'recognized') ? '#22c55e' : (mode === 'blocked' ? '#ef4444' : '#38bdf8');
+        let strokeColor = '#38bdf8'; // scanning default
+        let fillColor = 'rgba(56, 189, 248, 0.12)';
+        let tagBg = '#0284c7';
+
+        if (mode === 'recognized') {
+            strokeColor = '#22c55e';
+            fillColor = 'rgba(34, 197, 94, 0.15)';
+            tagBg = '#16a34a';
+        } else if (mode === 'completed') {
+            strokeColor = '#06b6d4';
+            fillColor = 'rgba(6, 182, 212, 0.12)';
+            tagBg = '#0891b2';
+        } else if (mode === 'blocked') {
+            strokeColor = '#ef4444';
+            fillColor = 'rgba(239, 68, 68, 0.15)';
+            tagBg = '#dc2626';
+        }
+
+        ctx.strokeStyle = strokeColor;
         ctx.lineWidth = 3;
         ctx.strokeRect(x, y, w, h);
 
-        ctx.fillStyle = (mode === 'recognized') ? 'rgba(34, 197, 94, 0.15)' : (mode === 'blocked' ? 'rgba(239, 68, 68, 0.15)' : 'rgba(56, 189, 248, 0.12)');
+        ctx.fillStyle = fillColor;
         ctx.fillRect(x, y, w, h);
 
         if (label) {
@@ -686,7 +729,7 @@ document.addEventListener('DOMContentLoaded', function () {
             const tagH = 22;
             const tagY = Math.max(2, y - tagH - 4);
 
-            ctx.fillStyle = (mode === 'recognized') ? '#16a34a' : (mode === 'blocked' ? '#dc2626' : '#0284c7');
+            ctx.fillStyle = tagBg;
             if (ctx.roundRect) {
                 ctx.beginPath();
                 ctx.roundRect(x, tagY, tagW, tagH, 4);
@@ -737,18 +780,21 @@ document.addEventListener('DOMContentLoaded', function () {
             });
             const data = await resp.json();
 
-            // Draw bounding box if face detected
+            // Draw bounding box if face detected (highlighting closest person and dimmed bystanders)
             if (data.box) {
-                let label = '🔍 Scanning Face...';
+                let label = '🎯 Primary Target (Closest)...';
                 let mode = 'scanning';
-                if (data.matched) {
+                if (data.already_punched || data.skip_to_next) {
+                    label = `✔ ${data.employee_name} (Already Done)`;
+                    mode = 'completed';
+                } else if (data.matched) {
                     label = `● ${data.employee_name} (${data.confidence}%)`;
                     mode = 'recognized';
                 } else if (data.security_alert) {
                     label = `⛔ BLOCKED: ${data.employee_name || 'Unauthorized'}`;
                     mode = 'blocked';
                 }
-                drawBoundingBox(data.box, label, mode, data.frame_dims);
+                drawBoundingBox(data.box, label, mode, data.frame_dims, data.all_faces);
             } else {
                 const oCtx = overlay.getContext('2d');
                 oCtx.clearRect(0, 0, overlay.width, overlay.height);
@@ -761,6 +807,14 @@ document.addEventListener('DOMContentLoaded', function () {
                 hudStatus.innerText = 'VERIFIED';
                 hudStatus.className = 'badge bg-success font-monospace';
                 hudMsg.innerText = data.message;
+                return;
+            }
+
+            // Scenario 2: Fast Punch Pipeline - Already completed for this action (Fast Bypass)
+            if (data.already_punched || data.skip_to_next) {
+                hudStatus.innerText = 'ALREADY DONE';
+                hudStatus.className = 'badge bg-info text-dark font-monospace';
+                hudMsg.innerText = data.message || `${data.employee_name} is already punched. Ready for next person.`;
                 return;
             }
 

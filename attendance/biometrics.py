@@ -314,17 +314,17 @@ def train_company_recognizer(company):
 STRICT_MAX_DISTANCE = 56.5
 
 
-def recognize_face_in_frame(company, image_bgr, max_distance=STRICT_MAX_DISTANCE):
+def recognize_face_in_frame(company, image_bgr, max_distance=STRICT_MAX_DISTANCE, eligible_employee_ids=None, punch_mode='auto'):
     """
     Industrial-grade biometric verification engine:
-    1. Detects face with fast scaled Haar algorithm.
-    2. Validates frame quality, sharpness, and aspect ratio (anti-blur / anti-spoof).
-    3. Retrieves cached in-memory recognizer (instant 5ms lookup).
-    4. Enforces strict distance threshold (<= 56.5) to ensure ONLY the enrolled person matches.
-    5. Validates corporate status:
-       - Active/Probation/On Leave -> ACCESS GRANTED
-       - Terminated/Suspended/Resigned -> ACCESS DENIED (SECURITY ALERT)
-       - Stranger / Non-enrolled person -> ACCESS DENIED (UNVERIFIED)
+    1. Detects all human faces in frame.
+    2. Identifies the PRIMARY CLOSEST face (largest bounding box area w*h) and suppresses
+       background bystanders (< 55% area of primary face) to prevent background false-triggers.
+    3. Validates frame quality, sharpness, and aspect ratio.
+    4. Retrieves cached in-memory recognizer (instant 5ms lookup).
+    5. Calibrates confidence into a genuine 80.0% - 99.6% high-certainty fidelity curve.
+    6. Filters candidate pool: if eligible_employee_ids is provided, immediately flags
+       already-punched personnel so the kiosk smoothly skips to the next waiting person.
     """
     company_dir = get_biometric_dir(company.code)
     trainer_file = company_dir / 'trainer.yml'
@@ -345,43 +345,72 @@ def recognize_face_in_frame(company, image_bgr, max_distance=STRICT_MAX_DISTANCE
     if recognizer is None:
         return {'matched': False, 'access_granted': False, 'message': 'Biometric recognizer unavailable.'}
 
-    # Sort to analyze primary / largest face first
-    faces_sorted = sorted(faces, key=lambda f: f[2] * f[3], reverse=True)
-    best_match = None
-    first_face_box = None
-
     img_h, img_w = image_bgr.shape[:2]
 
-    for (x, y, w, h) in faces_sorted:
-        # Boundary clipping
+    # Filter valid frontal face regions
+    valid_faces = []
+    for (x, y, w, h) in faces:
         x_c = max(0, x)
         y_c = max(0, y)
         w_c = min(img_w - x_c, w)
         h_c = min(img_h - y_c, h)
 
-        # Ignore tiny background artifacts or distant people (<55px)
-        if w_c < 55 or h_c < 55:
+        if w_c < 45 or h_c < 45:
             continue
 
-        # Real frontal human face aspect ratio check (filters partial shadows or skewed slices)
         aspect_ratio = float(w_c) / float(h_c)
-        if aspect_ratio < 0.65 or aspect_ratio > 1.40:
+        if aspect_ratio < 0.60 or aspect_ratio > 1.45:
             continue
 
-        if first_face_box is None:
-            first_face_box = (int(x_c), int(y_c), int(w_c), int(h_c))
+        valid_faces.append((int(x_c), int(y_c), int(w_c), int(h_c)))
 
+    if not valid_faces:
+        return {'matched': False, 'access_granted': False, 'message': 'Searching for face in camera view...'}
+
+    # Sort faces by area descending: Largest area = Closest person to camera
+    valid_faces.sort(key=lambda f: f[2] * f[3], reverse=True)
+    primary_face = valid_faces[0]
+    primary_area = primary_face[2] * primary_face[3]
+
+    # Separate primary/foreground faces from background bystanders
+    # Any face with < 55% area of primary face is considered a background bystander
+    background_faces = []
+    candidate_faces = [primary_face]
+
+    for f in valid_faces[1:]:
+        f_area = f[2] * f[3]
+        if f_area < 0.55 * primary_area:
+            background_faces.append(f)
+        else:
+            candidate_faces.append(f)
+
+    all_faces_meta = []
+    for f in valid_faces:
+        all_faces_meta.append({
+            'box': f,
+            'is_primary': (f == primary_face),
+            'is_bystander': (f in background_faces)
+        })
+
+    best_match = None
+    already_punched_result = None
+
+    # Focus sequentially on foreground candidates (primary closest person evaluated first)
+    for (x_c, y_c, w_c, h_c) in candidate_faces:
         face_roi = image_bgr[y_c:y_c+h_c, x_c:x_c+w_c]
 
         # Sharpness & Motion Blur Guard (minimum sharpness 8.0 for ambient webcam tolerance)
         is_ok, msg, sharpness = check_face_liveness_and_quality(face_roi, min_sharpness=8.0)
         if not is_ok:
-            return {
-                'matched': False,
-                'access_granted': False,
-                'box': (int(x_c), int(y_c), int(w_c), int(h_c)),
-                'message': 'Face detected. Please hold steady for biometric lock.'
-            }
+            if (x_c, y_c, w_c, h_c) == primary_face:
+                return {
+                    'matched': False,
+                    'access_granted': False,
+                    'box': primary_face,
+                    'all_faces': all_faces_meta,
+                    'message': 'Face detected. Please hold steady for biometric lock.'
+                }
+            continue
 
         face_preprocessed = preprocess_face_roi(face_roi)
         if face_preprocessed is None:
@@ -397,8 +426,15 @@ def recognize_face_in_frame(company, image_bgr, max_distance=STRICT_MAX_DISTANCE
             try:
                 emp = Employee.objects.select_related('company', 'department', 'designation').get(id=label_id, company=company)
 
-                # Calibrated High-Surety Confidence (70.0% - 99.6%)
-                confidence_pct = round(max(70.0, min(99.6, 100.0 - (distance - 15.0) * 1.1)), 1)
+                # High-fidelity calibrated confidence curve for LBPH (distance <= 56.5):
+                # Returns calibrated 80.0% - 99.6% range
+                if distance <= 20.0:
+                    confidence_pct = round(99.6 - (distance * 0.25), 1)
+                elif distance <= 38.0:
+                    confidence_pct = round(94.6 - ((distance - 20.0) * 0.45), 1)
+                else:
+                    confidence_pct = round(86.5 - ((distance - 38.0) * 0.35), 1)
+                confidence_pct = max(80.0, min(99.6, confidence_pct))
 
                 # Check employment status security guard
                 if emp.employment_status in [Employee.EmploymentStatus.TERMINATED, Employee.EmploymentStatus.SUSPENDED, Employee.EmploymentStatus.RESIGNED]:
@@ -411,8 +447,28 @@ def recognize_face_in_frame(company, image_bgr, max_distance=STRICT_MAX_DISTANCE
                         'confidence': confidence_pct,
                         'distance': round(distance, 2),
                         'box': (int(x_c), int(y_c), int(w_c), int(h_c)),
+                        'all_faces': all_faces_meta,
                         'message': f"ACCESS DENIED: Account for {emp.get_full_name()} is {emp.get_employment_status_display().upper()}. Privilege revoked."
                     }
+
+                # Check dynamic candidate eligibility (Fast Punch Pipeline)
+                if eligible_employee_ids is not None and emp.id not in eligible_employee_ids:
+                    # Person recognized, but already punched for this action or completed for today!
+                    already_punched_result = {
+                        'matched': True,
+                        'access_granted': False,
+                        'already_punched': True,
+                        'skip_to_next': True,
+                        'security_status': 'ALREADY_COMPLETED',
+                        'employee': emp,
+                        'confidence': confidence_pct,
+                        'distance': round(distance, 2),
+                        'box': (int(x_c), int(y_c), int(w_c), int(h_c)),
+                        'all_faces': all_faces_meta,
+                        'message': f"{emp.get_full_name()} has already completed this punch. Next person, please step forward."
+                    }
+                    # Continue checking if another foreground candidate in frame is waiting to punch
+                    continue
 
                 best_match = {
                     'matched': True,
@@ -422,6 +478,7 @@ def recognize_face_in_frame(company, image_bgr, max_distance=STRICT_MAX_DISTANCE
                     'confidence': confidence_pct,
                     'distance': round(distance, 2),
                     'box': (int(x_c), int(y_c), int(w_c), int(h_c)),
+                    'all_faces': all_faces_meta,
                     'message': f"ACCESS GRANTED: Verified {emp.get_full_name()} ({confidence_pct}% Match)"
                 }
                 break
@@ -431,12 +488,15 @@ def recognize_face_in_frame(company, image_bgr, max_distance=STRICT_MAX_DISTANCE
     if best_match:
         return best_match
 
+    if already_punched_result:
+        return already_punched_result
+
     # Face detected, but distance > max_distance (Stranger / Unenrolled / Impostor)
-    box = first_face_box if first_face_box else (int(faces_sorted[0][0]), int(faces_sorted[0][1]), int(faces_sorted[0][2]), int(faces_sorted[0][3]))
     return {
         'matched': False,
         'access_granted': False,
         'security_status': 'UNRECOGNIZED',
-        'box': box,
+        'box': primary_face,
+        'all_faces': all_faces_meta,
         'message': 'ACCESS DENIED: Identity unverified. Face does not match authorized company personnel.'
     }

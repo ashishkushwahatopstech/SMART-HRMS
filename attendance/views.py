@@ -1185,15 +1185,75 @@ def api_recognize_face(request):
         if image_bgr is None:
             return JsonResponse({'matched': False, 'message': 'Invalid image format'})
 
-        # Execute facial recognition with industrial strict security threshold
-        match_result = recognize_face_in_frame(company, image_bgr)
+        punch_mode = data.get('punch_mode', 'auto')
+
+        # Fast Punch Pipeline: Compute eligible candidate pool based on selected punch mode & today's attendance
+        now = timezone.now()
+        local_now = timezone.localtime(now)
+        today = local_now.date()
+
+        eligible_ids = None
+        if company:
+            today_atts = Attendance.objects.filter(company=company, date=today)
+            enrolled_emp_ids = set(
+                Employee.objects.filter(
+                    company=company,
+                    face_registration_status=True
+                ).exclude(
+                    employment_status__in=['terminated', 'suspended', 'resigned']
+                ).values_list('id', flat=True)
+            )
+
+            if punch_mode == 'check_in':
+                already_in_ids = set(today_atts.filter(check_in_time__isnull=False).values_list('employee_id', flat=True))
+                eligible_ids = enrolled_emp_ids - already_in_ids
+            elif punch_mode == 'lunch_out':
+                eligible_ids = set(
+                    today_atts.filter(
+                        check_in_time__isnull=False,
+                        lunch_start_time__isnull=True,
+                        check_out_time__isnull=True
+                    ).values_list('employee_id', flat=True)
+                )
+            elif punch_mode == 'lunch_in':
+                eligible_ids = set(
+                    today_atts.filter(
+                        lunch_start_time__isnull=False,
+                        lunch_end_time__isnull=True,
+                        check_out_time__isnull=True
+                    ).values_list('employee_id', flat=True)
+                )
+            elif punch_mode == 'check_out':
+                eligible_ids = set(
+                    today_atts.filter(
+                        check_in_time__isnull=False,
+                        check_out_time__isnull=True
+                    ).values_list('employee_id', flat=True)
+                )
+            elif punch_mode == 'auto':
+                # In auto mode, skip employees who have completed all attendance for today
+                already_finished_ids = set(today_atts.filter(check_out_time__isnull=False).values_list('employee_id', flat=True))
+                eligible_ids = enrolled_emp_ids - already_finished_ids
+
+        # Execute facial recognition prioritizing closest person and candidate eligibility
+        match_result = recognize_face_in_frame(
+            company,
+            image_bgr,
+            eligible_employee_ids=eligible_ids,
+            punch_mode=punch_mode
+        )
         frame_dims = [image_bgr.shape[1], image_bgr.shape[0]]
         match_result['frame_dims'] = frame_dims
 
         # Universal fallback across active companies for terminal operator (HR / Admin / Manager)
         if not match_result.get('matched') and is_terminal_operator:
             for other_comp in Company.objects.filter(is_active=True).exclude(id=company.id):
-                other_res = recognize_face_in_frame(other_comp, image_bgr)
+                other_res = recognize_face_in_frame(
+                    other_comp,
+                    image_bgr,
+                    eligible_employee_ids=None,
+                    punch_mode=punch_mode
+                )
                 if other_res.get('matched'):
                     match_result = other_res
                     match_result['frame_dims'] = frame_dims
@@ -1202,6 +1262,24 @@ def api_recognize_face(request):
 
         if not match_result.get('matched'):
             return JsonResponse(match_result)
+
+        # Fast Punch Pipeline: If employee was recognized but already completed this punch
+        if match_result.get('already_punched'):
+            emp = match_result.get('employee')
+            return JsonResponse({
+                'matched': True,
+                'access_granted': False,
+                'already_punched': True,
+                'skip_to_next': True,
+                'security_status': 'ALREADY_COMPLETED',
+                'employee_name': emp.get_full_name() if emp else 'Employee',
+                'employee_id': emp.employee_id if emp else '',
+                'confidence': match_result.get('confidence', 0),
+                'box': match_result.get('box'),
+                'all_faces': match_result.get('all_faces', []),
+                'frame_dims': frame_dims,
+                'message': match_result.get('message', f"{emp.get_full_name()} is already recorded. Ready for next employee.")
+            })
 
         # Check for Security Alert (e.g. Terminated / Suspended / Resigned employee attempting access)
         if match_result.get('access_granted') is False:
@@ -1215,6 +1293,7 @@ def api_recognize_face(request):
                 'employee_id': emp.employee_id if emp else '',
                 'confidence': match_result.get('confidence', 0),
                 'box': match_result.get('box'),
+                'all_faces': match_result.get('all_faces', []),
                 'frame_dims': frame_dims,
                 'message': match_result.get('message', 'ACCESS DENIED: Account privilege revoked.')
             })
