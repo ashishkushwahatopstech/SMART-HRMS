@@ -409,19 +409,34 @@ def train_company_recognizer(company):
 STRICT_MAX_DISTANCE = 56.5
 
 
-def recognize_face_in_frame(company, image_bgr, max_distance=STRICT_MAX_DISTANCE, eligible_employee_ids=None, punch_mode='auto'):
+def recognize_face_in_frame(
+    company,
+    image_bgr,
+    max_distance=STRICT_MAX_DISTANCE,
+    eligible_employee_ids=None,
+    punch_mode='auto',
+    remaining_employee_ids=None,
+    already_done_employee_ids=None
+):
     """
-    Industrial-grade biometric verification engine supporting Dual Engine switching:
+    Two-Tier Priority Facial Recognition Pipeline:
     1. Detects all human faces in frame.
     2. Identifies the PRIMARY CLOSEST face (largest bounding box area w*h) and suppresses
        background bystanders (< 55% area of primary face) to prevent background false-triggers.
     3. Validates frame quality, sharpness, and aspect ratio.
-    4. Evaluates face biometric using the active engine configured in settings.py:
+    4. TIER 1 (Priority): Searches exclusively through remaining un-punched employees
+       for this active punch mode. Fast, focused, and scales seamlessly during rush hours.
+    5. TIER 2 (Fallback): If no remaining employee matches, searches through employees
+       who have already completed this punch today to provide an instant, informative
+       'Already Punched' status popup rather than an 'Unknown Face' error.
+    6. Supports dual-engine execution:
        - 'onnx'   : MobileFaceNet Deep Embeddings (cosine similarity >= 0.52 -> 80% to 98%+)
        - 'opencv' : Classical LBPH Texture Histograms (distance <= 56.5 -> 80% to 90%)
-    5. Filters candidate pool: if eligible_employee_ids is provided, immediately flags
-       already-punched personnel so the kiosk smoothly skips to the next waiting person.
     """
+    # Backward compatibility alias
+    if remaining_employee_ids is None and eligible_employee_ids is not None:
+        remaining_employee_ids = eligible_employee_ids
+
     company_dir = get_biometric_dir(company.code)
     engine = get_biometric_engine()
     onnx_sess = get_onnx_session() if engine == 'onnx' else None
@@ -495,9 +510,6 @@ def recognize_face_in_frame(company, image_bgr, max_distance=STRICT_MAX_DISTANCE
             'is_bystander': (f in background_faces)
         })
 
-    best_match = None
-    already_punched_result = None
-
     # =========================================================================
     # ENGINE OPTION 1: ONNX Deep Neural Embeddings (MobileFaceNet, 88% - 98%+)
     # =========================================================================
@@ -507,62 +519,108 @@ def recognize_face_in_frame(company, image_bgr, max_distance=STRICT_MAX_DISTANCE
         if not company_embeddings:
             return {'matched': False, 'access_granted': False, 'message': 'No enrolled biometric profiles found.'}
 
+        # Precompute facial embeddings for candidates once
+        candidate_embeddings = []
         for (x_c, y_c, w_c, h_c) in candidate_faces:
             face_roi = image_bgr[y_c:y_c+h_c, x_c:x_c+w_c]
             is_ok, msg, sharpness = check_face_liveness_and_quality(face_roi, min_sharpness=8.0)
             if not is_ok:
-                if (x_c, y_c, w_c, h_c) == primary_face:
-                    return {
-                        'matched': False,
-                        'access_granted': False,
-                        'box': primary_face,
-                        'all_faces': all_faces_meta,
-                        'message': 'Face detected. Please hold steady for biometric lock.'
-                    }
                 continue
+            emb = compute_onnx_face_embedding(face_roi)
+            if emb is not None:
+                candidate_embeddings.append(((x_c, y_c, w_c, h_c), emb))
 
-            query_emb = compute_onnx_face_embedding(face_roi)
-            if query_emb is None:
-                continue
+        if not candidate_embeddings and primary_face:
+            return {
+                'matched': False,
+                'access_granted': False,
+                'box': primary_face,
+                'all_faces': all_faces_meta,
+                'message': 'Face detected. Please hold steady for biometric lock.'
+            }
 
-            # Calculate cosine similarities against all enrolled employee centroids
-            best_sim = -1.0
-            best_emp_id = None
-            for emp_id, centroid in company_embeddings.items():
-                sim = float(np.dot(query_emb, centroid))
-                if sim > best_sim:
-                    best_sim = sim
-                    best_emp_id = emp_id
+        # ---------------------------------------------------------------------
+        # TIER 1: Check ONLY remaining un-punched employees (Priority Pool)
+        # ---------------------------------------------------------------------
+        tier1_pool = company_embeddings
+        if remaining_employee_ids is not None:
+            tier1_pool = {eid: company_embeddings[eid] for eid in remaining_employee_ids if eid in company_embeddings}
 
-            # MobileFaceNet verification threshold: cosine similarity >= 0.52
-            if best_sim >= 0.52 and best_emp_id:
-                try:
-                    emp = Employee.objects.select_related('company', 'department', 'designation').get(id=best_emp_id, company=company)
+        if tier1_pool:
+            for (box_coords, query_emb) in candidate_embeddings:
+                x_c, y_c, w_c, h_c = box_coords
+                best_sim = -1.0
+                best_emp_id = None
+                for emp_id, centroid in tier1_pool.items():
+                    sim = float(np.dot(query_emb, centroid))
+                    if sim > best_sim:
+                        best_sim = sim
+                        best_emp_id = emp_id
 
-                    # High-fidelity calibrated confidence (80.0% - 99.6%)
-                    # Cosine sim: 0.52 -> 80.0%, 0.65 -> 88.0%, 0.80 -> 94.0%, 0.92 -> 98.5%
-                    confidence_pct = round(min(99.6, 80.0 + (best_sim - 0.52) * 45.0), 1)
-                    confidence_pct = max(80.0, min(99.6, confidence_pct))
+                if best_sim >= 0.52 and best_emp_id:
+                    try:
+                        emp = Employee.objects.select_related('company', 'department', 'designation').get(id=best_emp_id, company=company)
+                        confidence_pct = round(min(99.6, 80.0 + (best_sim - 0.52) * 45.0), 1)
+                        confidence_pct = max(80.0, min(99.6, confidence_pct))
 
-                    # Check employment status security guard
-                    if emp.employment_status in [Employee.EmploymentStatus.TERMINATED, Employee.EmploymentStatus.SUSPENDED, Employee.EmploymentStatus.RESIGNED]:
+                        if emp.employment_status in [Employee.EmploymentStatus.TERMINATED, Employee.EmploymentStatus.SUSPENDED, Employee.EmploymentStatus.RESIGNED]:
+                            return {
+                                'matched': True,
+                                'access_granted': False,
+                                'security_alert': True,
+                                'security_status': 'SUSPENDED_BLOCKED',
+                                'employee': emp,
+                                'confidence': confidence_pct,
+                                'similarity': round(best_sim, 4),
+                                'box': (int(x_c), int(y_c), int(w_c), int(h_c)),
+                                'all_faces': all_faces_meta,
+                                'engine': 'onnx',
+                                'message': f"ACCESS DENIED: Account for {emp.get_full_name()} is {emp.get_employment_status_display().upper()}. Privilege revoked."
+                            }
+
                         return {
                             'matched': True,
-                            'access_granted': False,
-                            'security_alert': True,
-                            'security_status': 'SUSPENDED_BLOCKED',
+                            'access_granted': True,
+                            'already_punched': False,
+                            'security_status': 'AUTHORIZED',
                             'employee': emp,
                             'confidence': confidence_pct,
                             'similarity': round(best_sim, 4),
                             'box': (int(x_c), int(y_c), int(w_c), int(h_c)),
                             'all_faces': all_faces_meta,
                             'engine': 'onnx',
-                            'message': f"ACCESS DENIED: Account for {emp.get_full_name()} is {emp.get_employment_status_display().upper()}. Privilege revoked."
+                            'message': f"ACCESS GRANTED: Verified {emp.get_full_name()} ({confidence_pct}% Match)"
                         }
+                    except Employee.DoesNotExist:
+                        continue
 
-                    # Check dynamic candidate eligibility (Fast Punch Pipeline)
-                    if eligible_employee_ids is not None and emp.id not in eligible_employee_ids:
-                        already_punched_result = {
+        # ---------------------------------------------------------------------
+        # TIER 2: Fallback check against already-punched employees
+        # ---------------------------------------------------------------------
+        tier2_pool = {}
+        if already_done_employee_ids is not None:
+            tier2_pool = {eid: company_embeddings[eid] for eid in already_done_employee_ids if eid in company_embeddings}
+        elif remaining_employee_ids is not None:
+            tier2_pool = {eid: centroid for eid, centroid in company_embeddings.items() if eid not in remaining_employee_ids}
+
+        if tier2_pool:
+            for (box_coords, query_emb) in candidate_embeddings:
+                x_c, y_c, w_c, h_c = box_coords
+                already_sim = -1.0
+                already_emp_id = None
+                for emp_id, centroid in tier2_pool.items():
+                    sim = float(np.dot(query_emb, centroid))
+                    if sim > already_sim:
+                        already_sim = sim
+                        already_emp_id = emp_id
+
+                if already_sim >= 0.52 and already_emp_id:
+                    try:
+                        emp = Employee.objects.select_related('company', 'department', 'designation').get(id=already_emp_id, company=company)
+                        confidence_pct = round(min(99.6, 80.0 + (already_sim - 0.52) * 45.0), 1)
+                        confidence_pct = max(80.0, min(99.6, confidence_pct))
+
+                        return {
                             'matched': True,
                             'access_granted': False,
                             'already_punched': True,
@@ -570,29 +628,14 @@ def recognize_face_in_frame(company, image_bgr, max_distance=STRICT_MAX_DISTANCE
                             'security_status': 'ALREADY_COMPLETED',
                             'employee': emp,
                             'confidence': confidence_pct,
-                            'similarity': round(best_sim, 4),
+                            'similarity': round(already_sim, 4),
                             'box': (int(x_c), int(y_c), int(w_c), int(h_c)),
                             'all_faces': all_faces_meta,
                             'engine': 'onnx',
-                            'message': f"{emp.get_full_name()} has already completed this punch. Next person, please step forward."
+                            'message': f"{emp.get_full_name()} has already completed this punch today. Ready for next person."
                         }
+                    except Employee.DoesNotExist:
                         continue
-
-                    best_match = {
-                        'matched': True,
-                        'access_granted': True,
-                        'security_status': 'AUTHORIZED',
-                        'employee': emp,
-                        'confidence': confidence_pct,
-                        'similarity': round(best_sim, 4),
-                        'box': (int(x_c), int(y_c), int(w_c), int(h_c)),
-                        'all_faces': all_faces_meta,
-                        'engine': 'onnx',
-                        'message': f"ACCESS GRANTED: Verified {emp.get_full_name()} ({confidence_pct}% Match)"
-                    }
-                    break
-                except Employee.DoesNotExist:
-                    continue
 
     # =========================================================================
     # ENGINE OPTION 2: OpenCV LBPH Fallback / Toggle
@@ -603,6 +646,7 @@ def recognize_face_in_frame(company, image_bgr, max_distance=STRICT_MAX_DISTANCE
         if recognizer is None:
             return {'matched': False, 'access_granted': False, 'message': 'Biometric recognizer unavailable.'}
 
+        # TIER 1: Search remaining employees
         for (x_c, y_c, w_c, h_c) in candidate_faces:
             face_roi = image_bgr[y_c:y_c+h_c, x_c:x_c+w_c]
             is_ok, msg, sharpness = check_face_liveness_and_quality(face_roi, min_sharpness=8.0)
@@ -626,36 +670,56 @@ def recognize_face_in_frame(company, image_bgr, max_distance=STRICT_MAX_DISTANCE
             except Exception:
                 continue
 
-            # Strict security distance threshold check (<= 56.5)
             if distance <= max_distance:
-                try:
-                    emp = Employee.objects.select_related('company', 'department', 'designation').get(id=label_id, company=company)
+                # Check if in remaining pool (or if remaining_employee_ids is None)
+                if remaining_employee_ids is None or label_id in remaining_employee_ids:
+                    try:
+                        emp = Employee.objects.select_related('company', 'department', 'designation').get(id=label_id, company=company)
+                        if distance <= 20.0:
+                            confidence_pct = round(99.6 - (distance * 0.25), 1)
+                        elif distance <= 38.0:
+                            confidence_pct = round(94.6 - ((distance - 20.0) * 0.45), 1)
+                        else:
+                            confidence_pct = round(86.5 - ((distance - 38.0) * 0.35), 1)
+                        confidence_pct = max(80.0, min(99.6, confidence_pct))
 
-                    if distance <= 20.0:
-                        confidence_pct = round(99.6 - (distance * 0.25), 1)
-                    elif distance <= 38.0:
-                        confidence_pct = round(94.6 - ((distance - 20.0) * 0.45), 1)
-                    else:
-                        confidence_pct = round(86.5 - ((distance - 38.0) * 0.35), 1)
-                    confidence_pct = max(80.0, min(99.6, confidence_pct))
+                        if emp.employment_status in [Employee.EmploymentStatus.TERMINATED, Employee.EmploymentStatus.SUSPENDED, Employee.EmploymentStatus.RESIGNED]:
+                            return {
+                                'matched': True,
+                                'access_granted': False,
+                                'security_alert': True,
+                                'security_status': 'SUSPENDED_BLOCKED',
+                                'employee': emp,
+                                'confidence': confidence_pct,
+                                'distance': round(distance, 2),
+                                'box': (int(x_c), int(y_c), int(w_c), int(h_c)),
+                                'all_faces': all_faces_meta,
+                                'engine': 'opencv',
+                                'message': f"ACCESS DENIED: Account for {emp.get_full_name()} is {emp.get_employment_status_display().upper()}. Privilege revoked."
+                            }
 
-                    if emp.employment_status in [Employee.EmploymentStatus.TERMINATED, Employee.EmploymentStatus.SUSPENDED, Employee.EmploymentStatus.RESIGNED]:
                         return {
                             'matched': True,
-                            'access_granted': False,
-                            'security_alert': True,
-                            'security_status': 'SUSPENDED_BLOCKED',
+                            'access_granted': True,
+                            'already_punched': False,
+                            'security_status': 'AUTHORIZED',
                             'employee': emp,
                             'confidence': confidence_pct,
                             'distance': round(distance, 2),
                             'box': (int(x_c), int(y_c), int(w_c), int(h_c)),
                             'all_faces': all_faces_meta,
                             'engine': 'opencv',
-                            'message': f"ACCESS DENIED: Account for {emp.get_full_name()} is {emp.get_employment_status_display().upper()}. Privilege revoked."
+                            'message': f"ACCESS GRANTED: Verified {emp.get_full_name()} ({confidence_pct}% Match)"
                         }
+                    except Employee.DoesNotExist:
+                        continue
 
-                    if eligible_employee_ids is not None and emp.id not in eligible_employee_ids:
-                        already_punched_result = {
+                # TIER 2: If recognized face is NOT in remaining pool, check if already completed
+                elif (already_done_employee_ids is None or label_id in already_done_employee_ids):
+                    try:
+                        emp = Employee.objects.select_related('company', 'department', 'designation').get(id=label_id, company=company)
+                        confidence_pct = 90.0
+                        return {
                             'matched': True,
                             'access_granted': False,
                             'already_punched': True,
@@ -667,31 +731,10 @@ def recognize_face_in_frame(company, image_bgr, max_distance=STRICT_MAX_DISTANCE
                             'box': (int(x_c), int(y_c), int(w_c), int(h_c)),
                             'all_faces': all_faces_meta,
                             'engine': 'opencv',
-                            'message': f"{emp.get_full_name()} has already completed this punch. Next person, please step forward."
+                            'message': f"{emp.get_full_name()} has already completed this punch today. Ready for next person."
                         }
+                    except Employee.DoesNotExist:
                         continue
-
-                    best_match = {
-                        'matched': True,
-                        'access_granted': True,
-                        'security_status': 'AUTHORIZED',
-                        'employee': emp,
-                        'confidence': confidence_pct,
-                        'distance': round(distance, 2),
-                        'box': (int(x_c), int(y_c), int(w_c), int(h_c)),
-                        'all_faces': all_faces_meta,
-                        'engine': 'opencv',
-                        'message': f"ACCESS GRANTED: Verified {emp.get_full_name()} ({confidence_pct}% Match)"
-                    }
-                    break
-                except Employee.DoesNotExist:
-                    continue
-
-    if best_match:
-        return best_match
-
-    if already_punched_result:
-        return already_punched_result
 
     # Face detected, but distance/similarity did not meet match criteria (Stranger)
     return {

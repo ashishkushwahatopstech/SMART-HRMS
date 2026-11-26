@@ -1189,12 +1189,19 @@ def api_recognize_face(request):
 
         punch_mode = data.get('punch_mode', 'auto')
 
-        # Fast Punch Pipeline: Compute eligible candidate pool based on selected punch mode & today's attendance
+        # Two-Tier Fast Punch Pipeline: Compute Remaining (Tier 1) vs Already-Done (Tier 2) candidate pools
         now = timezone.now()
         local_now = timezone.localtime(now)
         today = local_now.date()
 
-        eligible_ids = None
+        def format_dt(dt, with_seconds=False):
+            if not dt:
+                return ""
+            ldt = timezone.localtime(dt) if timezone.is_aware(dt) else dt
+            return ldt.strftime('%I:%M:%S %p' if with_seconds else '%I:%M %p')
+
+        remaining_ids = None
+        already_done_ids = None
         if company:
             today_atts = Attendance.objects.filter(company=company, date=today)
             enrolled_emp_ids = set(
@@ -1207,10 +1214,11 @@ def api_recognize_face(request):
             )
 
             if punch_mode == 'check_in':
-                already_in_ids = set(today_atts.filter(check_in_time__isnull=False).values_list('employee_id', flat=True))
-                eligible_ids = enrolled_emp_ids - already_in_ids
+                already_done_ids = set(today_atts.filter(check_in_time__isnull=False).values_list('employee_id', flat=True))
+                remaining_ids = enrolled_emp_ids - already_done_ids
             elif punch_mode == 'lunch_out':
-                eligible_ids = set(
+                already_done_ids = set(today_atts.filter(lunch_start_time__isnull=False).values_list('employee_id', flat=True))
+                remaining_ids = set(
                     today_atts.filter(
                         check_in_time__isnull=False,
                         lunch_start_time__isnull=True,
@@ -1218,7 +1226,8 @@ def api_recognize_face(request):
                     ).values_list('employee_id', flat=True)
                 )
             elif punch_mode == 'lunch_in':
-                eligible_ids = set(
+                already_done_ids = set(today_atts.filter(lunch_end_time__isnull=False).values_list('employee_id', flat=True))
+                remaining_ids = set(
                     today_atts.filter(
                         lunch_start_time__isnull=False,
                         lunch_end_time__isnull=True,
@@ -1226,7 +1235,8 @@ def api_recognize_face(request):
                     ).values_list('employee_id', flat=True)
                 )
             elif punch_mode == 'check_out':
-                eligible_ids = set(
+                already_done_ids = set(today_atts.filter(check_out_time__isnull=False).values_list('employee_id', flat=True))
+                remaining_ids = set(
                     today_atts.filter(
                         check_in_time__isnull=False,
                         check_out_time__isnull=True
@@ -1234,14 +1244,17 @@ def api_recognize_face(request):
                 )
             elif punch_mode == 'auto':
                 # In auto mode, skip employees who have completed all attendance for today
-                already_finished_ids = set(today_atts.filter(check_out_time__isnull=False).values_list('employee_id', flat=True))
-                eligible_ids = enrolled_emp_ids - already_finished_ids
+                already_done_ids = set(today_atts.filter(check_out_time__isnull=False).values_list('employee_id', flat=True))
+                remaining_ids = enrolled_emp_ids - already_done_ids
 
-        # Execute facial recognition prioritizing closest person and candidate eligibility
+        # Execute two-tier facial recognition:
+        # Tier 1: Check ONLY remaining un-punched employees (fast matching)
+        # Tier 2: Check already-punched employees ONLY if Tier 1 found no match
         match_result = recognize_face_in_frame(
             company,
             image_bgr,
-            eligible_employee_ids=eligible_ids,
+            remaining_employee_ids=remaining_ids,
+            already_done_employee_ids=already_done_ids,
             punch_mode=punch_mode
         )
         frame_dims = [image_bgr.shape[1], image_bgr.shape[0]]
@@ -1253,7 +1266,8 @@ def api_recognize_face(request):
                 other_res = recognize_face_in_frame(
                     other_comp,
                     image_bgr,
-                    eligible_employee_ids=None,
+                    remaining_employee_ids=None,
+                    already_done_employee_ids=None,
                     punch_mode=punch_mode
                 )
                 if other_res.get('matched'):
@@ -1265,9 +1279,42 @@ def api_recognize_face(request):
         if not match_result.get('matched'):
             return JsonResponse(match_result)
 
-        # Fast Punch Pipeline: If employee was recognized but already completed this punch
+        # Fast Punch Pipeline: Employee matched in Tier 2 (Already completed for this action)
         if match_result.get('already_punched'):
             emp = match_result.get('employee')
+            att_rec = Attendance.objects.filter(employee=emp, date=today).first() if emp else None
+            punch_detail = ""
+            if att_rec:
+                if punch_mode == 'check_in' and att_rec.check_in_time:
+                    punch_detail = f"Check-In verified at {format_dt(att_rec.check_in_time)}"
+                elif punch_mode == 'lunch_out' and att_rec.lunch_start_time:
+                    punch_detail = f"Lunch Out started at {format_dt(att_rec.lunch_start_time)}"
+                elif punch_mode == 'lunch_in' and att_rec.lunch_end_time:
+                    punch_detail = f"Lunch In ended at {format_dt(att_rec.lunch_end_time)}"
+                elif punch_mode == 'check_out' and att_rec.check_out_time:
+                    punch_detail = f"Check-Out verified at {format_dt(att_rec.check_out_time)}"
+                elif att_rec.check_in_time:
+                    punch_detail = f"Check-In verified at {format_dt(att_rec.check_in_time)}"
+
+            # Resolve employee photo url
+            photo_url = None
+            if emp:
+                if emp.profile_picture:
+                    try:
+                        photo_url = emp.profile_picture.url
+                    except Exception:
+                        photo_url = None
+                if not photo_url:
+                    company_code = emp.company.code.upper() if emp.company else 'DEFAULT'
+                    sample_file = Path(settings.MEDIA_ROOT) / 'faces' / company_code / str(emp.employee_id) / 'sample_01.jpg'
+                    if sample_file.exists():
+                        photo_url = f"/media/faces/{company_code}/{emp.employee_id}/sample_01.jpg"
+
+            action_label = punch_mode.replace('_', ' ').title()
+            msg = f"{emp.get_full_name()} has already completed {action_label}."
+            if punch_detail:
+                msg += f" ({punch_detail})"
+
             return JsonResponse({
                 'matched': True,
                 'access_granted': False,
@@ -1276,11 +1323,14 @@ def api_recognize_face(request):
                 'security_status': 'ALREADY_COMPLETED',
                 'employee_name': emp.get_full_name() if emp else 'Employee',
                 'employee_id': emp.employee_id if emp else '',
+                'department': emp.department.name if (emp and emp.department) else 'General',
                 'confidence': match_result.get('confidence', 0),
+                'photo_url': photo_url,
                 'box': match_result.get('box'),
                 'all_faces': match_result.get('all_faces', []),
                 'frame_dims': frame_dims,
-                'message': match_result.get('message', f"{emp.get_full_name()} is already recorded. Ready for next employee.")
+                'punch_detail': punch_detail,
+                'message': msg
             })
 
         # Check for Security Alert (e.g. Terminated / Suspended / Resigned employee attempting access)
