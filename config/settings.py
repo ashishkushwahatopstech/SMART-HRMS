@@ -178,5 +178,7 @@ EMAIL_TIMEOUT = 10
 # Easily toggle anytime without breaking any database records, models, or attendance logs!
 BIOMETRIC_ENGINE = os.environ.get('HRMS_BIOMETRIC_ENGINE', 'onnx')
 BIOMETRIC_MODEL_PATH = BASE_DIR / 'models' / 'biometrics' / 'mobile_facenet.onnx'
+BIOMETRIC_YUNET_MODEL_PATH = BASE_DIR / 'models' / 'biometrics' / 'face_detection_yunet_2023mar.onnx'
+BIOMETRIC_ONNX_THRESHOLD = float(os.environ.get('HRMS_BIOMETRIC_ONNX_THRESHOLD', '0.55'))
 
 

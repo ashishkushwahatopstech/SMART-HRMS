@@ -1,5 +1,6 @@
 from decimal import Decimal
 from datetime import datetime, date, time, timedelta
+from unittest.mock import patch, MagicMock
 from django.test import TestCase, Client
 from django.urls import reverse
 from django.utils import timezone
@@ -682,6 +683,52 @@ class BiometricFaceRecognitionTests(TestCase):
                     self.assertFalse(res_excluded['access_granted'])
                     self.assertTrue(res_excluded.get('already_punched'))
                     self.assertTrue(res_excluded.get('skip_to_next'))
+
+    def test_yunet_detector_and_5point_arcface_alignment(self):
+        """Tests that YuNet detector initializes, detects landmarks, and warps face to canonical ArcFace coordinates."""
+        import cv2
+        import numpy as np
+        from attendance.biometrics import get_yunet_detector, align_face_5points, ARCFACE_REF_POINTS, save_face_sample, get_biometric_dir
+
+        detector = get_yunet_detector()
+        self.assertIsNotNone(detector, "YuNet FaceDetectorYN should initialize from models/biometrics")
+
+        # Test landmark alignment on dummy face points
+        dummy_landmarks = np.array([
+            [100.0, 100.0],  # right eye
+            [150.0, 100.0],  # left eye
+            [125.0, 130.0],  # nose
+            [105.0, 160.0],  # right mouth
+            [145.0, 160.0]   # left mouth
+        ], dtype=np.float32)
+
+        dummy_frame = np.full((320, 320, 3), 128, dtype=np.uint8)
+        aligned = align_face_5points(dummy_frame, landmarks=dummy_landmarks, target_size=(112, 112))
+        self.assertIsNotNone(aligned)
+        self.assertEqual(aligned.shape, (112, 112, 3))
+
+        # Test margin padding fallback when landmarks are not present
+        padded = align_face_5points(dummy_frame, landmarks=None, box=(50, 50, 100, 100), target_size=(112, 112))
+        self.assertIsNotNone(padded)
+        self.assertEqual(padded.shape, (112, 112, 3))
+
+        # Test save_face_sample creates both sample and aligned chips
+        with patch('attendance.biometrics.detect_faces_detailed') as mock_det, \
+             patch('attendance.biometrics.check_face_liveness_and_quality', return_value=(True, "OK", 50.0)), \
+             patch('attendance.biometrics.train_company_recognizer', return_value=True):
+            
+            mock_det.return_value = [{
+                'box': (50, 50, 100, 100),
+                'landmarks': dummy_landmarks,
+                'score': 0.95,
+                'detector': 'yunet'
+            }]
+
+            ok, msg, box = save_face_sample(self.emp_a, dummy_frame, sample_index=1)
+            self.assertTrue(ok)
+            emp_dir = get_biometric_dir(self.company_a.code, self.emp_a.employee_id)
+            self.assertTrue((emp_dir / 'sample_01.jpg').exists())
+            self.assertTrue((emp_dir / 'aligned_01.jpg').exists())
 
 
 

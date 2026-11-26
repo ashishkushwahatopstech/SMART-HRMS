@@ -16,6 +16,17 @@ from employees.models import Employee
 _COMPANY_RECOGNIZERS = {}  # {company_code: {'recognizer': obj, 'mtime': float, 'cached_at': float}}
 _COMPANY_ONNX_EMBEDDINGS = {}  # {company_code: {'embeddings': {emp_id: array}, 'mtime': float}}
 _ONNX_SESSION = None
+_YUNET_DETECTOR = None
+
+# Canonical 5-Point ArcFace Reference Coordinates (for 112x112 MobileFaceNet)
+# [Right Eye (image left), Left Eye (image right), Nose Tip, Right Mouth, Left Mouth]
+ARCFACE_REF_POINTS = np.array([
+    [38.2946, 51.6963],
+    [73.5318, 51.5014],
+    [56.0252, 71.7366],
+    [41.5493, 92.3655],
+    [70.7299, 92.2041]
+], dtype=np.float32)
 
 
 def get_biometric_engine():
@@ -110,6 +121,85 @@ def get_face_cascade():
     return cv2.CascadeClassifier(cascade_path)
 
 
+def get_yunet_detector():
+    """
+    Returns an in-memory cached instance of OpenCV's deep YuNet CNN face detector.
+    Runs in ~5ms on CPU and outputs bounding box + 5 facial landmarks.
+    """
+    global _YUNET_DETECTOR
+    if _YUNET_DETECTOR is not None:
+        return _YUNET_DETECTOR
+
+    model_path = getattr(settings, 'BIOMETRIC_YUNET_MODEL_PATH', None)
+    if not model_path:
+        model_path = Path(settings.BASE_DIR) / 'models' / 'biometrics' / 'face_detection_yunet_2023mar.onnx'
+
+    if not Path(model_path).exists() or not hasattr(cv2, 'FaceDetectorYN'):
+        return None
+
+    try:
+        _YUNET_DETECTOR = cv2.FaceDetectorYN.create(
+            model=str(model_path),
+            config='',
+            input_size=(320, 320),
+            score_threshold=0.55,
+            nms_threshold=0.3,
+            top_k=5000
+        )
+        return _YUNET_DETECTOR
+    except Exception:
+        return None
+
+
+def align_face_5points(image_bgr, landmarks=None, box=None, target_size=(112, 112)):
+    """
+    Warps a face into ArcFace canonical coordinates using 5-point affine transformation.
+    If landmarks are not present, uses safe proportional margin padding (18%) and resizes.
+    Provides robust biometric alignment for beards, mustaches, long hair, glasses, and tilt.
+    """
+    if image_bgr is None or image_bgr.size == 0:
+        return None
+
+    img_h, img_w = image_bgr.shape[:2]
+
+    # Priority 1: 5-Point Affine Similarity Transform
+    if landmarks is not None and len(landmarks) == 5:
+        try:
+            M, inliers = cv2.estimateAffinePartial2D(
+                landmarks.astype(np.float32),
+                ARCFACE_REF_POINTS,
+                method=cv2.LMEDS
+            )
+            if M is not None:
+                warped = cv2.warpAffine(
+                    image_bgr,
+                    M,
+                    target_size,
+                    borderMode=cv2.BORDER_REFLECT
+                )
+                return warped
+        except Exception:
+            pass
+
+    # Priority 2: Proportional Margin Padding (18% Biometric Safety Zone)
+    if box is not None:
+        x, y, w, h = box
+        pad_x = int(w * 0.18)
+        pad_y = int(h * 0.18)
+        x1 = max(0, x - pad_x)
+        y1 = max(0, y - pad_y)
+        x2 = min(img_w, x + w + pad_x)
+        y2 = min(img_h, y + h + pad_y)
+        face_roi = image_bgr[y1:y2, x1:x2]
+    else:
+        face_roi = image_bgr
+
+    if face_roi is None or face_roi.size == 0:
+        return None
+
+    return cv2.resize(face_roi, target_size, interpolation=cv2.INTER_LINEAR)
+
+
 def get_biometric_dir(company_code, employee_id=None):
     """
     Returns the absolute path to biometric storage directory for a company or employee.
@@ -199,13 +289,76 @@ def check_face_liveness_and_quality(face_bgr, min_sharpness=16.0):
     return True, "Quality verified", sharpness
 
 
+def detect_faces_detailed(image_bgr, score_threshold=0.55):
+    """
+    High-accuracy face detection using deep YuNet CNN with 5-point facial landmarks.
+    Gracefully falls back to Haar Cascade if YuNet is unavailable.
+    Returns:
+    [
+        {
+            'box': (x, y, w, h),
+            'landmarks': np.ndarray(5, 2) or None,
+            'score': float,
+            'detector': 'yunet' or 'haar'
+        }, ...
+    ]
+    """
+    if image_bgr is None or image_bgr.size == 0:
+        return []
+
+    h, w = image_bgr.shape[:2]
+    detector = get_yunet_detector()
+
+    if detector is not None:
+        try:
+            detector.setInputSize((w, h))
+            detector.setScoreThreshold(score_threshold)
+            ret, faces = detector.detect(image_bgr)
+            if ret and faces is not None and len(faces) > 0:
+                results = []
+                for f in faces:
+                    x = max(0, int(f[0]))
+                    y = max(0, int(f[1]))
+                    bw = min(w - x, int(f[2]))
+                    bh = min(h - y, int(f[3]))
+                    if bw < 25 or bh < 25:
+                        continue
+                    landmarks = f[4:14].reshape((5, 2)).astype(np.float32)
+                    conf = float(f[14])
+                    results.append({
+                        'box': (x, y, bw, bh),
+                        'landmarks': landmarks,
+                        'score': conf,
+                        'detector': 'yunet'
+                    })
+                if results:
+                    return results
+        except Exception:
+            pass
+
+    # Haar Cascade Fallback
+    haar_boxes = detect_faces_haar(image_bgr)
+    return [{'box': b, 'landmarks': None, 'score': 1.0, 'detector': 'haar'} for b in haar_boxes]
+
+
 def detect_faces(image_bgr, min_neighbors=5, scale_factor=1.15):
     """
     Fast, robust face detection in a BGR image frame.
-    Downscales large frames (e.g. >480px width) during Haar detection for a 4x CPU speed boost,
-    then accurately projects bounding boxes back into native coordinate space.
+    Uses YuNet deep detector with automatic Haar Cascade fallback.
+    Returns list of (x, y, w, h) bounding boxes.
     """
-    if image_bgr is None:
+    detailed = detect_faces_detailed(image_bgr)
+    if detailed:
+        return [f['box'] for f in detailed]
+    return []
+
+
+def detect_faces_haar(image_bgr, min_neighbors=5, scale_factor=1.15):
+    """
+    Haar Cascade fallback face detection in a BGR image frame.
+    Downscales large frames (e.g. >480px width) during Haar detection for a 4x CPU speed boost.
+    """
+    if image_bgr is None or image_bgr.size == 0:
         return []
 
     h, w = image_bgr.shape[:2]
@@ -234,21 +387,28 @@ def detect_faces(image_bgr, min_neighbors=5, scale_factor=1.15):
     if scale != 1.0:
         inv_scale = 1.0 / scale
         return [(int(fx * inv_scale), int(fy * inv_scale), int(fw * inv_scale), int(fh * inv_scale)) for (fx, fy, fw, fh) in faces]
-    return faces
+    return [(int(fx), int(fy), int(fw), int(fh)) for (fx, fy, fw, fh) in faces]
 
 
 def save_face_sample(employee, image_bgr, sample_index=1):
     """
-    Detects the primary face in the frame, applies canonical preprocessing,
-    and writes it to media/faces/<company>/<employee_id>/sample_XX.jpg.
+    Detects the primary face in the frame using YuNet with 5-point ArcFace alignment,
+    generates both a 5-point aligned 112x112 chip and a canonical 200x200 chip,
+    and writes them to media/faces/<company>/<employee_id>/.
     """
-    faces = detect_faces(image_bgr)
-    if len(faces) == 0:
-        return False, "No face detected in camera frame. Center your face inside the guide.", None
+    detailed = detect_faces_detailed(image_bgr)
+    if not detailed:
+        legacy = detect_faces(image_bgr)
+        if legacy:
+            detailed = [{'box': b, 'landmarks': None, 'score': 1.0, 'detector': 'legacy'} for b in legacy]
+        else:
+            return False, "No face detected in camera frame. Center your face inside the guide.", None
 
     # Pick the largest face in frame
-    faces_sorted = sorted(faces, key=lambda f: f[2] * f[3], reverse=True)
-    x, y, w, h = faces_sorted[0]
+    detailed_sorted = sorted(detailed, key=lambda f: f['box'][2] * f['box'][3], reverse=True)
+    primary = detailed_sorted[0]
+    x, y, w, h = primary['box']
+    landmarks = primary.get('landmarks')
 
     # Boundary safety
     img_h, img_w = image_bgr.shape[:2]
@@ -262,6 +422,9 @@ def save_face_sample(employee, image_bgr, sample_index=1):
     if not is_ok:
         return False, msg, (int(x), int(y), int(w), int(h))
 
+    # Generate 5-point aligned face chip for deep MobileFaceNet embeddings
+    aligned_face_112 = align_face_5points(image_bgr, landmarks=landmarks, box=(x, y, w, h), target_size=(112, 112))
+
     face_normalized = preprocess_face_roi(face_roi, target_size=(200, 200))
     if face_normalized is None:
         return False, "Error processing facial sample.", None
@@ -269,6 +432,11 @@ def save_face_sample(employee, image_bgr, sample_index=1):
     emp_dir = get_biometric_dir(employee.company.code, employee.employee_id)
     file_path = emp_dir / f"sample_{sample_index:02d}.jpg"
     cv2.imwrite(str(file_path), face_normalized)
+
+    # Also save the aligned chip for deep neural embeddings
+    if aligned_face_112 is not None:
+        aligned_path = emp_dir / f"aligned_{sample_index:02d}.jpg"
+        cv2.imwrite(str(aligned_path), aligned_face_112)
 
     # Count how many samples now exist
     existing_samples = list(emp_dir.glob("sample_*.jpg"))
@@ -344,8 +512,17 @@ def train_company_recognizer(company):
             if face_img_bgr is None:
                 continue
 
-            # Compute ONNX embedding vector for this sample
-            emb_vec = compute_onnx_face_embedding(face_img_bgr)
+            # Prioritize dedicated 5-point aligned ArcFace chip if present
+            aligned_file = emp_dir / s_path.name.replace('sample_', 'aligned_')
+            if aligned_file.exists():
+                aligned_chip = cv2.imread(str(aligned_file))
+            else:
+                det = detect_faces_detailed(face_img_bgr)
+                lm = det[0].get('landmarks') if det else None
+                aligned_chip = align_face_5points(face_img_bgr, landmarks=lm, target_size=(112, 112))
+
+            # Compute ONNX embedding vector for this sample on aligned chip
+            emb_vec = compute_onnx_face_embedding(aligned_chip if aligned_chip is not None else face_img_bgr)
             if emb_vec is not None:
                 emp_onnx_vectors.append(emb_vec)
 
@@ -457,7 +634,14 @@ def recognize_face_in_frame(
             else:
                 return {'matched': False, 'access_granted': False, 'message': 'No employees enrolled for facial recognition yet.'}
 
-    faces = detect_faces(image_bgr)
+    detailed = detect_faces_detailed(image_bgr)
+    if detailed:
+        faces = [f['box'] for f in detailed]
+        landmark_map = {f['box']: f.get('landmarks') for f in detailed}
+    else:
+        faces = detect_faces(image_bgr)
+        landmark_map = {}
+
     img_h, img_w = image_bgr.shape[:2]
     if len(faces) == 0:
         # Fallback if input image itself is already a cropped face sample chip (e.g. 200x200)
@@ -519,6 +703,8 @@ def recognize_face_in_frame(
         if not company_embeddings:
             return {'matched': False, 'access_granted': False, 'message': 'No enrolled biometric profiles found.'}
 
+        onnx_threshold = getattr(settings, 'BIOMETRIC_ONNX_THRESHOLD', 0.55)
+
         # Precompute facial embeddings for candidates once
         candidate_embeddings = []
         for (x_c, y_c, w_c, h_c) in candidate_faces:
@@ -526,7 +712,11 @@ def recognize_face_in_frame(
             is_ok, msg, sharpness = check_face_liveness_and_quality(face_roi, min_sharpness=8.0)
             if not is_ok:
                 continue
-            emb = compute_onnx_face_embedding(face_roi)
+
+            # 5-point ArcFace affine alignment (with safe proportional padding fallback)
+            lm = landmark_map.get((x_c, y_c, w_c, h_c))
+            aligned_chip = align_face_5points(image_bgr, landmarks=lm, box=(x_c, y_c, w_c, h_c), target_size=(112, 112))
+            emb = compute_onnx_face_embedding(aligned_chip if aligned_chip is not None else face_roi)
             if emb is not None:
                 candidate_embeddings.append(((x_c, y_c, w_c, h_c), emb))
 
@@ -557,10 +747,10 @@ def recognize_face_in_frame(
                         best_sim = sim
                         best_emp_id = emp_id
 
-                if best_sim >= 0.52 and best_emp_id:
+                if best_sim >= onnx_threshold and best_emp_id:
                     try:
                         emp = Employee.objects.select_related('company', 'department', 'designation').get(id=best_emp_id, company=company)
-                        confidence_pct = round(min(99.6, 80.0 + (best_sim - 0.52) * 45.0), 1)
+                        confidence_pct = round(min(99.6, 80.0 + (best_sim - onnx_threshold) * 45.0), 1)
                         confidence_pct = max(80.0, min(99.6, confidence_pct))
 
                         if emp.employment_status in [Employee.EmploymentStatus.TERMINATED, Employee.EmploymentStatus.SUSPENDED, Employee.EmploymentStatus.RESIGNED]:
@@ -614,10 +804,10 @@ def recognize_face_in_frame(
                         already_sim = sim
                         already_emp_id = emp_id
 
-                if already_sim >= 0.52 and already_emp_id:
+                if already_sim >= onnx_threshold and already_emp_id:
                     try:
                         emp = Employee.objects.select_related('company', 'department', 'designation').get(id=already_emp_id, company=company)
-                        confidence_pct = round(min(99.6, 80.0 + (already_sim - 0.52) * 45.0), 1)
+                        confidence_pct = round(min(99.6, 80.0 + (already_sim - onnx_threshold) * 45.0), 1)
                         confidence_pct = max(80.0, min(99.6, confidence_pct))
 
                         return {
