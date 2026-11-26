@@ -242,15 +242,9 @@ document.addEventListener('DOMContentLoaded', function () {
         const scaleX = overlay.width / (video.videoWidth || 640);
         const scaleY = overlay.height / (video.videoHeight || 480);
 
-        let x;
-        if (currentFacingMode === 'user') {
-            const origX = box[0];
-            const origW = box[2];
-            const mirroredX = (video.videoWidth || 640) - (origX + origW);
-            x = mirroredX * scaleX;
-        } else {
-            x = box[0] * scaleX;
-        }
+        // Frame is already mirrored by captureFrame() when facingMode === 'user',
+        // so coordinates returned from backend already align with the mirrored video feed.
+        const x = box[0] * scaleX;
 
         const y = box[1] * scaleY;
         const w = box[2] * scaleX;

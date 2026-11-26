@@ -672,9 +672,9 @@ document.addEventListener('DOMContentLoaded', function () {
                 if (f.is_bystander && f.box) {
                     const bw = f.box[2] * scaleX;
                     const bh = f.box[3] * scaleY;
-                    const bx = (currentFacingMode === 'user')
-                        ? (overlay.width - (f.box[0] * scaleX + bw))
-                        : (f.box[0] * scaleX);
+                    // Frame is already mirrored by captureFrame() when facingMode === 'user',
+                    // so backend coordinates already match the mirrored video preview 1:1.
+                    const bx = f.box[0] * scaleX;
                     const by = f.box[1] * scaleY;
 
                     ctx.save();
@@ -694,9 +694,9 @@ document.addEventListener('DOMContentLoaded', function () {
         // Draw Primary Closest Face Box
         const w = box[2] * scaleX;
         const h = box[3] * scaleY;
-        const x = (currentFacingMode === 'user')
-            ? (overlay.width - (box[0] * scaleX + w))
-            : (box[0] * scaleX);
+        // Frame is already mirrored by captureFrame() when facingMode === 'user',
+        // so backend coordinates already match the mirrored video preview 1:1.
+        const x = box[0] * scaleX;
         const y = box[1] * scaleY;
 
         ctx.save();

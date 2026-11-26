@@ -888,10 +888,9 @@ document.addEventListener('DOMContentLoaded', function () {
 
         const w = box[2] * scaleX;
         const h = box[3] * scaleY;
-        // Mirror box position when front camera is mirrored with scaleX(-1)
-        const x = (currentFacingMode === 'user')
-            ? (overlay.width - (box[0] * scaleX + w))
-            : (box[0] * scaleX);
+        // Frame is already mirrored by captureFrame() when facingMode === 'user',
+        // so coordinates returned from backend already align with the mirrored video feed.
+        const x = box[0] * scaleX;
         const y = box[1] * scaleY;
 
         ctx.save();
