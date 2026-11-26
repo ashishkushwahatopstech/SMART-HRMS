@@ -75,9 +75,9 @@
         </a>
 
         <div class="sidebar-section-title">Leaves & Holidays</div>
-        <a href="{% url 'holidays:calendar' %}" class="sidebar-link">
+        <a href="{% url 'holidays:calendar' %}" class="sidebar-link{% if request.resolver_match.app_name == 'holidays' and request.resolver_match.url_name == 'calendar' %} active{% endif %}">
             <i class="bi bi-calendar2-event"></i>
-            <span>Holiday Calendar</span>
+            <span>Holiday & Calendar</span>
         </a>
         <a href="{% url 'leaves:dashboard' %}" class="sidebar-link">
             <i class="bi bi-speedometer2"></i>
@@ -148,6 +148,12 @@
             <i class="bi bi-envelope-paper"></i>
             <span>Apply Leave</span>
         </a>
+        {% if not request.user.is_hr_admin %}
+        <a href="{% url 'holidays:calendar' %}" class="sidebar-link{% if request.resolver_match.app_name == 'holidays' and request.resolver_match.url_name == 'calendar' %} active{% endif %}">
+            <i class="bi bi-calendar2-event"></i>
+            <span>Holiday & Calendar</span>
+        </a>
+        {% endif %}
         <a href="{% url 'payroll:my_payslips' %}" class="sidebar-link">
             <i class="bi bi-receipt"></i>
             <span>My Payslips</span>

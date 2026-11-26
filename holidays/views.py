@@ -94,11 +94,19 @@ def holiday_list(request):
 @role_required(allowed_roles=['super_admin', 'hr_admin', 'manager', 'employee'])
 def holiday_calendar(request):
     """
-    Visual monthly calendar grid highlighting company public holidays and scheduled weekly offs.
+    Monthly holiday calendar view supporting both Table View (default) and Grid View
+    highlighting company public holidays and scheduled weekly offs.
     """
     now = timezone.now()
     year = int(request.GET.get('year', now.year))
     month = int(request.GET.get('month', now.month))
+    view_mode = request.GET.get('view', 'table').strip().lower()
+    if view_mode not in ['table', 'grid']:
+        view_mode = 'table'
+
+    scope = request.GET.get('scope', 'month').strip().lower()
+    if scope not in ['month', 'year', 'upcoming']:
+        scope = 'month'
 
     # Clamp month bounds
     if month < 1:
@@ -121,12 +129,28 @@ def holiday_calendar(request):
 
     companies_list = Company.objects.filter(is_active=True) if request.user.is_superuser else ([company] if company else [])
 
-    # Fetch holidays for this company in this month
+    # Fetch holidays for this company in this month & year
     month_holidays = {}
+    month_holidays_list = []
+    year_holidays_list = []
+    upcoming_holidays_list = []
     if company:
-        holidays_qs = Holiday.objects.filter(company=company, date__year=year, date__month=month)
-        for h in holidays_qs:
-            month_holidays[h.date] = h
+        all_year_holidays = list(Holiday.objects.filter(company=company, date__year=year).order_by('date'))
+        year_holidays_list = all_year_holidays
+        for h in all_year_holidays:
+            if h.date.month == month:
+                month_holidays[h.date] = h
+                month_holidays_list.append(h)
+            if h.date >= now.date():
+                upcoming_holidays_list.append(h)
+
+    # Determine table view items based on scope
+    if scope == 'year':
+        table_holidays = year_holidays_list
+    elif scope == 'upcoming':
+        table_holidays = upcoming_holidays_list
+    else:
+        table_holidays = month_holidays_list
 
     # Calculate calendar matrix (Weeks x 7 Days starting Monday)
     cal = calendar.Calendar(firstweekday=0)
@@ -171,19 +195,32 @@ def holiday_calendar(request):
     # Month statistics
     working_days_count = Holiday.get_working_days_in_month(company, year, month) if company else 0
 
+    # Month and Year selection choices for navigation dropdowns
+    months_choices = [(i, calendar.month_name[i]) for i in range(1, 13)]
+    years_choices = list(range(year - 2, year + 4))
+
     return render(request, 'holidays/holiday_calendar.html', {
         'company': company,
         'companies_list': companies_list,
         'year': year,
         'month': month,
         'month_name': month_name,
+        'view_mode': view_mode,
+        'scope': scope,
         'prev_month': prev_month,
         'prev_year': prev_year,
         'next_month': next_month,
         'next_year': next_year,
         'calendar_weeks': calendar_weeks,
-        'month_holidays_count': len(month_holidays),
+        'month_holidays_count': len(month_holidays_list),
+        'year_holidays_count': len(year_holidays_list),
+        'upcoming_holidays_count': len(upcoming_holidays_list),
+        'month_holidays_list': month_holidays_list,
+        'table_holidays': table_holidays,
         'working_days_count': working_days_count,
+        'months_choices': months_choices,
+        'years_choices': years_choices,
+        'today': now.date(),
     })
 
 

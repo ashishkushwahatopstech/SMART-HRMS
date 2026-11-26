@@ -1,36 +1,57 @@
 {% extends 'base.html' %}
 
-{% block title %}Calendar View: {{ month_name }} {{ year }} &mdash; Smart HRMS{% endblock %}
-{% block page_title %}Monthly Calendar View{% endblock %}
+{% block title %}Holiday Calendar: {{ month_name }} {{ year }} &mdash; Smart HRMS{% endblock %}
+{% block page_title %}Holiday &amp; Calendar{% endblock %}
 
 {% block content %}
-<div class="card card-stat p-4 mb-4">
-    <!-- Header with Month Navigation & Company Filter -->
-    <div class="d-flex flex-column flex-md-row justify-content-between align-items-center gap-3 mb-4">
-        <div class="d-flex align-items-center gap-2">
-            <a href="?year={{ prev_year }}&month={{ prev_month }}{% if company %}&company={{ company.id }}{% endif %}" class="btn btn-outline-secondary btn-sm" title="Previous Month">
-                <i class="bi bi-chevron-left"></i>
-            </a>
-            <h4 class="fw-bold text-dark mb-0 font-monospace">
-                {{ month_name }} {{ year }}
+<div class="card card-stat p-3 p-md-4 mb-4">
+    <!-- Header with Month Navigation, Company Filter & View Switcher -->
+    <div class="d-flex flex-column flex-lg-row justify-content-between align-items-start align-items-lg-center gap-3 mb-4 pb-3 border-bottom">
+        <!-- Month Navigation & Dropdown Jump -->
+        <div class="d-flex flex-wrap align-items-center gap-2">
+            <div class="btn-group btn-group-sm">
+                <a href="?year={{ prev_year }}&month={{ prev_month }}&view={{ view_mode }}{% if company %}&company={{ company.id }}{% endif %}{% if scope %}&scope={{ scope }}{% endif %}" class="btn btn-outline-secondary" title="Previous Month">
+                    <i class="bi bi-chevron-left"></i>
+                </a>
+                <a href="?year={{ next_year }}&month={{ next_month }}&view={{ view_mode }}{% if company %}&company={{ company.id }}{% endif %}{% if scope %}&scope={{ scope }}{% endif %}" class="btn btn-outline-secondary" title="Next Month">
+                    <i class="bi bi-chevron-right"></i>
+                </a>
+            </div>
+
+            <h4 class="fw-bold text-dark mb-0 d-flex align-items-center gap-2">
+                <i class="bi bi-calendar2-week text-primary"></i>
+                <span>{{ month_name }} {{ year }}</span>
             </h4>
-            <a href="?year={{ next_year }}&month={{ next_month }}{% if company %}&company={{ company.id }}{% endif %}" class="btn btn-outline-secondary btn-sm" title="Next Month">
-                <i class="bi bi-chevron-right"></i>
+
+            <a href="?year={% now 'Y' %}&month={% now 'm' %}&view={{ view_mode }}{% if company %}&company={{ company.id }}{% endif %}" class="btn btn-sm btn-outline-primary ms-1">
+                <i class="bi bi-clock-history me-1"></i>Today
             </a>
-            <a href="?year={% now 'Y' %}&month={% now 'm' %}{% if company %}&company={{ company.id }}{% endif %}" class="btn btn-light btn-sm border ms-2">
-                Today
-            </a>
+
+            <!-- Quick Month / Year Selector -->
+            <form method="get" class="d-inline-flex align-items-center gap-1 ms-lg-2">
+                <input type="hidden" name="view" value="{{ view_mode }}">
+                {% if scope %}<input type="hidden" name="scope" value="{{ scope }}">{% endif %}
+                {% if company %}<input type="hidden" name="company" value="{{ company.id }}">{% endif %}
+                <select name="month" class="form-select form-select-sm" style="width: auto;" onchange="this.form.submit()">
+                    {% for m_num, m_label in months_choices %}
+                        <option value="{{ m_num }}" {% if month == m_num %}selected{% endif %}>{{ m_label|slice:":3" }}</option>
+                    {% endfor %}
+                </select>
+                <select name="year" class="form-select form-select-sm" style="width: auto;" onchange="this.form.submit()">
+                    {% for y in years_choices %}
+                        <option value="{{ y }}" {% if year == y %}selected{% endif %}>{{ y }}</option>
+                    {% endfor %}
+                </select>
+            </form>
         </div>
 
-        <!-- Legend and Badges -->
-        <div class="d-flex flex-wrap gap-2 align-items-center">
-            <span class="badge bg-danger">Mandatory Holiday</span>
-            <span class="badge bg-info text-dark">Optional Holiday</span>
-            <span class="badge bg-light text-muted border">Weekly Off</span>
+        <!-- Top Actions: Company Filter, View Switcher (Table vs Grid), Add Holiday -->
+        <div class="d-flex flex-wrap align-items-center gap-2 ms-auto">
             {% if request.user.is_superuser %}
-            <form method="get" class="d-inline-block ms-2">
+            <form method="get" class="d-inline-block">
                 <input type="hidden" name="year" value="{{ year }}">
                 <input type="hidden" name="month" value="{{ month }}">
+                <input type="hidden" name="view" value="{{ view_mode }}">
                 <select name="company" class="form-select form-select-sm" onchange="this.form.submit()">
                     {% for c in companies_list %}
                         <option value="{{ c.id }}" {% if company.id == c.id %}selected{% endif %}>{{ c.name }} ({{ c.code }})</option>
@@ -38,34 +59,232 @@
                 </select>
             </form>
             {% else %}
-                <span class="badge bg-primary-subtle text-primary">{{ company.name }}</span>
+                <span class="badge bg-primary-subtle text-primary border border-primary-subtle py-2 px-3 fw-semibold">
+                    <i class="bi bi-building me-1"></i>{{ company.name }}
+                </span>
             {% endif %}
-            <a href="{% url 'holidays:list' %}?year={{ year }}" class="btn btn-outline-secondary btn-sm ms-2">
-                <i class="bi bi-list-ul me-1"></i> Table View
+
+            <!-- Segemented View Switcher: Table View (default) vs Grid View -->
+            <div class="btn-group shadow-sm" role="group" aria-label="View Mode Switcher">
+                <a href="?year={{ year }}&month={{ month }}&view=table{% if company %}&company={{ company.id }}{% endif %}{% if scope %}&scope={{ scope }}{% endif %}"
+                   class="btn btn-sm {% if view_mode == 'table' %}btn-primary active fw-bold text-white shadow-sm{% else %}btn-outline-secondary bg-white text-secondary{% endif %}"
+                   id="btnTableView" title="Switch to Table View">
+                    <i class="bi bi-table me-1"></i> Table View
+                </a>
+                <a href="?year={{ year }}&month={{ month }}&view=grid{% if company %}&company={{ company.id }}{% endif %}"
+                   class="btn btn-sm {% if view_mode == 'grid' %}btn-primary active fw-bold text-white shadow-sm{% else %}btn-outline-secondary bg-white text-secondary{% endif %}"
+                   id="btnGridView" title="Switch to Calendar Grid View">
+                    <i class="bi bi-calendar3 me-1"></i> Grid View
+                </a>
+            </div>
+
+            {% if request.user.is_hr_admin %}
+            <a href="{% url 'holidays:create' %}" class="btn btn-sm btn-success shadow-sm">
+                <i class="bi bi-plus-circle me-1"></i> Add Holiday
             </a>
+            {% endif %}
         </div>
     </div>
 
     <!-- Monthly Summary Bar -->
-    <div class="p-3 bg-light rounded-3 border d-flex flex-wrap justify-content-around text-center gap-2 mb-3">
+    <div class="p-3 bg-light rounded-3 border d-flex flex-wrap justify-content-around text-center gap-3 mb-4 shadow-sm">
         <div>
-            <div class="text-muted small">Public Holidays</div>
-            <div class="fs-5 fw-bold text-danger">{{ month_holidays_count }}</div>
+            <div class="text-muted small fw-semibold text-uppercase" style="letter-spacing: 0.5px;">Public Holidays ({{ month_name }})</div>
+            <div class="fs-5 fw-bold text-danger">{{ month_holidays_count }} Day{% if month_holidays_count != 1 %}s{% endif %}</div>
         </div>
-        <div class="border-start"></div>
+        <div class="border-start d-none d-sm-block"></div>
         <div>
-            <div class="text-muted small">Standard Working Days</div>
+            <div class="text-muted small fw-semibold text-uppercase" style="letter-spacing: 0.5px;">Working Days ({{ month_name }})</div>
             <div class="fs-5 fw-bold text-success">{{ working_days_count }} Days</div>
         </div>
-        <div class="border-start"></div>
+        <div class="border-start d-none d-sm-block"></div>
         <div>
-            <div class="text-muted small">Weekly Off Policy</div>
+            <div class="text-muted small fw-semibold text-uppercase" style="letter-spacing: 0.5px;">Weekly Off Policy</div>
             <div class="fs-6 fw-semibold text-dark">{{ company.get_weekly_holiday_policy_display|default:"Sunday Only" }}</div>
+        </div>
+        <div class="border-start d-none d-sm-block"></div>
+        <div>
+            <div class="text-muted small fw-semibold text-uppercase" style="letter-spacing: 0.5px;">Full Year {{ year }}</div>
+            <div class="fs-5 fw-bold text-primary">{{ year_holidays_count }} Holidays</div>
+        </div>
+    </div>
+
+    {% if view_mode == 'table' %}
+    <!-- ========================================== -->
+    <!-- TABLE VIEW (DEFAULT)                      -->
+    <!-- ========================================== -->
+    <div class="d-flex flex-column flex-sm-row justify-content-between align-items-start align-items-sm-center gap-2 mb-3">
+        <!-- Scope Tabs: Month (Default), Full Year, Upcoming -->
+        <ul class="nav nav-pills gap-1">
+            <li class="nav-item">
+                <a class="nav-link py-1 px-3 small fw-semibold {% if scope == 'month' %}active bg-primary{% else %}text-secondary bg-light border{% endif %}"
+                   href="?year={{ year }}&month={{ month }}&view=table&scope=month{% if company %}&company={{ company.id }}{% endif %}">
+                    <i class="bi bi-calendar-month me-1"></i> {{ month_name }} ({{ month_holidays_count }})
+                </a>
+            </li>
+            <li class="nav-item">
+                <a class="nav-link py-1 px-3 small fw-semibold {% if scope == 'year' %}active bg-primary{% else %}text-secondary bg-light border{% endif %}"
+                   href="?year={{ year }}&month={{ month }}&view=table&scope=year{% if company %}&company={{ company.id }}{% endif %}">
+                    <i class="bi bi-calendar-range me-1"></i> Full Year {{ year }} ({{ year_holidays_count }})
+                </a>
+            </li>
+            <li class="nav-item">
+                <a class="nav-link py-1 px-3 small fw-semibold {% if scope == 'upcoming' %}active bg-primary{% else %}text-secondary bg-light border{% endif %}"
+                   href="?year={{ year }}&month={{ month }}&view=table&scope=upcoming{% if company %}&company={{ company.id }}{% endif %}">
+                    <i class="bi bi-clock-history me-1"></i> Upcoming ({{ upcoming_holidays_count }})
+                </a>
+            </li>
+        </ul>
+
+        <div class="d-flex align-items-center gap-2">
+            <span class="badge bg-danger-subtle text-danger border border-danger-subtle" style="font-size: 0.72rem;">Mandatory</span>
+            <span class="badge bg-info-subtle text-dark border border-info-subtle" style="font-size: 0.72rem;">Optional</span>
+            <span class="badge bg-primary-subtle text-primary border border-primary-subtle" style="font-size: 0.72rem;">Observance</span>
+        </div>
+    </div>
+
+    {% if table_holidays %}
+    <div class="table-responsive rounded-3 border">
+        <table class="table table-hover align-middle mb-0">
+            <thead class="table-light">
+                <tr class="text-secondary small text-uppercase">
+                    <th scope="col" style="min-width: 140px;">Date &amp; Day</th>
+                    <th scope="col" style="min-width: 220px;">Holiday Name</th>
+                    <th scope="col" style="min-width: 140px;">Category</th>
+                    <th scope="col" style="min-width: 120px;">Timeline</th>
+                    <th scope="col" class="d-none d-md-table-cell" style="min-width: 200px;">Description</th>
+                    {% if request.user.is_hr_admin %}
+                    <th scope="col" class="text-end" style="min-width: 100px;">Actions</th>
+                    {% endif %}
+                </tr>
+            </thead>
+            <tbody>
+                {% for h in table_holidays %}
+                <tr class="{% if h.date == today %}table-primary bg-opacity-25{% endif %}">
+                    <td>
+                        <div class="fw-bold text-dark font-monospace" style="font-size: 0.95rem;">
+                            {{ h.date|date:"d M Y" }}
+                        </div>
+                        <span class="badge bg-light text-muted border" style="font-size: 0.72rem;">
+                            {{ h.date|date:"l" }}
+                        </span>
+                    </td>
+                    <td>
+                        <div class="d-flex align-items-center gap-2">
+                            <i class="bi bi-star-fill text-warning" style="font-size: 0.85rem;"></i>
+                            <span class="fw-semibold text-dark">{{ h.name }}</span>
+                        </div>
+                        <div class="d-md-none text-muted small mt-1">
+                            {{ h.description|default:"Corporate declared public holiday" }}
+                        </div>
+                    </td>
+                    <td>
+                        {% if h.holiday_type == 'mandatory' %}
+                            <span class="badge bg-danger">
+                                <i class="bi bi-shield-check me-1"></i>Mandatory
+                            </span>
+                        {% elif h.holiday_type == 'optional' %}
+                            <span class="badge bg-info text-dark">
+                                <i class="bi bi-calendar-event me-1"></i>Optional
+                            </span>
+                        {% else %}
+                            <span class="badge bg-primary">
+                                <i class="bi bi-building me-1"></i>Company Event
+                            </span>
+                        {% endif %}
+                    </td>
+                    <td>
+                        {% if h.date == today %}
+                            <span class="badge bg-primary px-2 py-1 shadow-sm">
+                                <i class="bi bi-bell-fill me-1"></i>Today
+                            </span>
+                        {% elif h.date > today %}
+                            <span class="badge bg-success-subtle text-success border border-success-subtle px-2 py-1">
+                                <i class="bi bi-clock-history me-1"></i>Upcoming
+                            </span>
+                        {% else %}
+                            <span class="badge bg-secondary-subtle text-muted px-2 py-1">
+                                Completed
+                            </span>
+                        {% endif %}
+                    </td>
+                    <td class="d-none d-md-table-cell text-muted small">
+                        {{ h.description|default:"Corporate declared public holiday" }}
+                    </td>
+                    {% if request.user.is_hr_admin %}
+                    <td class="text-end">
+                        <div class="btn-group btn-group-sm">
+                            <a href="{% url 'holidays:edit' h.id %}" class="btn btn-outline-primary" title="Edit Holiday">
+                                <i class="bi bi-pencil"></i>
+                            </a>
+                            <a href="{% url 'holidays:delete' h.id %}" class="btn btn-outline-danger" title="Delete Holiday">
+                                <i class="bi bi-trash"></i>
+                            </a>
+                        </div>
+                    </td>
+                    {% endif %}
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% else %}
+    <!-- Empty State for Table View -->
+    <div class="text-center py-5 px-3 bg-light rounded-3 border">
+        <div class="mb-3">
+            <i class="bi bi-calendar-x text-muted" style="font-size: 3rem;"></i>
+        </div>
+        <h5 class="fw-bold text-dark mb-1">
+            {% if scope == 'month' %}
+                No Public Holidays in {{ month_name }} {{ year }}
+            {% elif scope == 'upcoming' %}
+                No Upcoming Holidays in {{ year }}
+            {% else %}
+                No Holidays Found for {{ year }}
+            {% endif %}
+        </h5>
+        <p class="text-muted small mb-3">
+            {% if scope == 'month' %}
+                There are no public or optional holidays scheduled for {{ month_name }} {{ year }}.
+            {% else %}
+                No holiday records match your current company calendar filter.
+            {% endif %}
+        </p>
+        <div class="d-flex justify-content-center flex-wrap gap-2">
+            {% if scope == 'month' and year_holidays_count > 0 %}
+            <a href="?year={{ year }}&month={{ month }}&view=table&scope=year{% if company %}&company={{ company.id }}{% endif %}" class="btn btn-outline-primary btn-sm">
+                <i class="bi bi-calendar-range me-1"></i> View Full Year {{ year }} ({{ year_holidays_count }})
+            </a>
+            {% endif %}
+            <a href="?year={{ year }}&month={{ month }}&view=grid{% if company %}&company={{ company.id }}{% endif %}" class="btn btn-outline-secondary btn-sm">
+                <i class="bi bi-calendar3 me-1"></i> Open Grid View
+            </a>
+            {% if request.user.is_hr_admin %}
+            <a href="{% url 'holidays:create' %}" class="btn btn-primary btn-sm">
+                <i class="bi bi-plus-circle me-1"></i> Add Holiday
+            </a>
+            {% endif %}
+        </div>
+    </div>
+    {% endif %}
+
+    {% else %}
+    <!-- ========================================== -->
+    <!-- GRID VIEW (FULL MONTH MATRIX)             -->
+    <!-- ========================================== -->
+    <div class="d-flex justify-content-between align-items-center mb-3">
+        <div class="d-flex flex-wrap gap-2 align-items-center">
+            <span class="badge bg-danger">Mandatory Holiday</span>
+            <span class="badge bg-info text-dark">Optional Holiday</span>
+            <span class="badge bg-light text-muted border">Weekly Off</span>
+        </div>
+        <div class="text-muted small">
+            <i class="bi bi-info-circle me-1"></i>Click <strong>Table View</strong> above to view sorted list.
         </div>
     </div>
 
     <!-- Calendar Table Grid -->
-    <div class="table-responsive">
+    <div class="table-responsive rounded-3 border">
         <table class="table table-bordered mb-0 calendar-table" style="table-layout: fixed; min-width: 600px;">
             <thead class="table-light text-center">
                 <tr>
@@ -97,7 +316,7 @@
                             <i class="bi bi-star-fill me-1" style="font-size: 0.65rem;"></i>
                             <strong>{{ day.holiday.name }}</strong>
                         </div>
-                        <div class="text-muted" style="font-size: 0.65rem;">
+                        <div class="text-muted text-truncate" style="font-size: 0.65rem;">
                             {{ day.holiday.get_holiday_type_display }}
                         </div>
                         {% endif %}
@@ -108,5 +327,6 @@
             </tbody>
         </table>
     </div>
+    {% endif %}
 </div>
 {% endblock %}

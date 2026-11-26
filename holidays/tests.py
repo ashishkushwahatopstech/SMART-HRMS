@@ -141,13 +141,35 @@ class HolidayViewsAndRBACSecurityTests(TestCase):
         # Beta holiday NOT visible
         self.assertNotContains(response, 'Beta Innovation Day')
 
-    def test_calendar_grid_view_renders(self):
-        """Calendar view renders successfully with company and month context."""
+    def test_calendar_default_table_view(self):
+        """Visiting holiday calendar defaults to Table View of that month/year."""
         self.client.login(username='hr_holiday', password='Password@123')
         response = self.client.get(reverse('holidays:calendar') + '?year=2026&month=5')
         self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.context['view_mode'], 'table')
+        self.assertContains(response, 'Table View')
+        self.assertContains(response, 'Grid View')
+        self.assertContains(response, 'Alpha Founders Day')
+        self.assertContains(response, 'May 2026')
+
+    def test_calendar_grid_view_renders(self):
+        """Explicitly requesting grid view renders the 7-column calendar matrix."""
+        self.client.login(username='hr_holiday', password='Password@123')
+        response = self.client.get(reverse('holidays:calendar') + '?year=2026&month=5&view=grid')
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.context['view_mode'], 'grid')
+        self.assertContains(response, 'calendar-table')
         self.assertContains(response, 'May 2026')
         self.assertContains(response, 'Alpha Founders Day')
+
+    def test_calendar_table_scope_switching(self):
+        """Table view supports switching between month, full year, and upcoming."""
+        self.client.login(username='hr_holiday', password='Password@123')
+        # Full year scope
+        response_year = self.client.get(reverse('holidays:calendar') + '?year=2026&month=5&view=table&scope=year')
+        self.assertEqual(response_year.status_code, 200)
+        self.assertEqual(response_year.context['scope'], 'year')
+        self.assertContains(response_year, 'Alpha Founders Day')
 
     def test_holiday_create_and_edit_workflow(self):
         """HR can create and edit a holiday."""
