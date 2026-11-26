@@ -987,6 +987,7 @@ def enroll_face(request, employee_id):
         'employee': employee,
         'sample_files': sample_files,
         'samples_count': len(sample_files),
+        'biometric_engine': getattr(settings, 'BIOMETRIC_ENGINE', 'onnx').upper(),
     })
 
 
@@ -1127,6 +1128,7 @@ def face_kiosk(request, company_code=None):
         'total_staff': total_staff,
         'today': today,
         'universal_kiosk_url': universal_kiosk_url,
+        'biometric_engine': getattr(settings, 'BIOMETRIC_ENGINE', 'onnx').upper(),
     })
 
 

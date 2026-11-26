@@ -21,6 +21,9 @@
                     {% else %}
                         <span class="badge bg-warning text-dark fs-6"><i class="bi bi-hourglass-split me-1"></i> Pending Enrollment</span>
                     {% endif %}
+                    <span class="badge bg-secondary-subtle text-secondary border font-monospace ms-1" style="font-size: 0.75rem;" title="Active Biometric Processing Engine">
+                        <i class="bi bi-cpu-fill me-1 text-primary"></i>ENGINE: {{ biometric_engine|default:"ONNX" }}
+                    </span>
                 </div>
             </div>
 
@@ -378,9 +381,9 @@ document.addEventListener('DOMContentLoaded', function () {
             }
         }
 
-        guidanceText.innerText = 'Enrollment complete! Training recognizer...';
+        guidanceText.innerText = 'Enrollment complete! Training neural recognizer...';
         setTimeout(() => {
-            alert('Face enrollment successfully completed and LBPH recognizer retrained!');
+            alert('Face enrollment successfully completed and {{ biometric_engine|default:"ONNX" }} biometric profiles updated!');
             window.location.reload();
         }, 1200);
     });
