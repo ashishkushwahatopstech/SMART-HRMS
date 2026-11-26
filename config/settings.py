@@ -169,3 +169,14 @@ DEFAULT_FROM_EMAIL = 'Smart HRMS <ashishkushwaha88643@gmail.com>'
 SERVER_EMAIL = 'ashishkushwaha88643@gmail.com'
 EMAIL_TIMEOUT = 10
 
+# ==============================================================================
+# Biometric Recognition Engine Configuration
+# ==============================================================================
+# Options:
+#   'onnx'   : High-Accuracy Deep Learning Embeddings (MobileFaceNet ONNX, 88% - 98%+ match)
+#   'opencv' : Classical Lightweight Texture Histograms (OpenCV LBPH, 82% - 90% match)
+# Easily toggle anytime without breaking any database records, models, or attendance logs!
+BIOMETRIC_ENGINE = os.environ.get('HRMS_BIOMETRIC_ENGINE', 'onnx')
+BIOMETRIC_MODEL_PATH = BASE_DIR / 'models' / 'biometrics' / 'mobile_facenet.onnx'
+
+

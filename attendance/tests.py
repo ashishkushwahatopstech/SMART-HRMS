@@ -606,48 +606,82 @@ class BiometricFaceRecognitionTests(TestCase):
         self.assertEqual(emp_res.status_code, 200)
         self.assertContains(emp_res, 'Campus Attendance Audit Ledger')
 
-    def test_closest_person_priority_and_candidate_exclusion(self):
-        """Recognition engine prioritizes closest face and enforces candidate eligibility."""
+    def test_closest_person_priority_and_candidate_exclusion_opencv(self):
+        """OpenCV engine prioritizes closest face and enforces candidate eligibility."""
         import numpy as np
         from unittest.mock import patch, MagicMock
+        from django.test import override_settings
 
-        # Create dummy image array
         dummy_img = np.zeros((480, 640, 3), dtype=np.uint8)
-
-        # Multiple faces detected: Primary (180x180) vs Background (70x70)
-        # Area of Primary = 32400. Area of Background = 4900 (<55% of primary area).
         mock_faces = [(100, 100, 180, 180), (350, 120, 70, 70)]
 
-        with patch('attendance.biometrics.detect_faces', return_value=mock_faces), \
-             patch('attendance.biometrics.get_cached_recognizer') as mock_recog_fn, \
-             patch('attendance.biometrics.check_face_liveness_and_quality', return_value=(True, "OK", 50.0)), \
-             patch('attendance.biometrics.preprocess_face_roi', return_value=np.zeros((200, 200), dtype=np.uint8)):
+        with override_settings(BIOMETRIC_ENGINE='opencv'):
+            with patch('attendance.biometrics.detect_faces', return_value=mock_faces), \
+                 patch('attendance.biometrics.get_cached_recognizer') as mock_recog_fn, \
+                 patch('attendance.biometrics.check_face_liveness_and_quality', return_value=(True, "OK", 50.0)), \
+                 patch('attendance.biometrics.preprocess_face_roi', return_value=np.zeros((200, 200), dtype=np.uint8)):
 
-            # Mock recognizer predict returning self.emp_a.id with distance 25.0
-            mock_recog = MagicMock()
-            mock_recog.predict.return_value = (self.emp_a.id, 25.0)
-            mock_recog_fn.return_value = mock_recog
+                mock_recog = MagicMock()
+                mock_recog.predict.return_value = (self.emp_a.id, 25.0)
+                mock_recog_fn.return_value = mock_recog
 
-            from attendance.biometrics import recognize_face_in_frame
-            with patch('pathlib.Path.exists', return_value=True):
-                # Test closest person selection & calibrated high confidence (>= 90%)
-                result = recognize_face_in_frame(self.company_a, dummy_img)
-                self.assertTrue(result['matched'])
-                self.assertTrue(result['access_granted'])
-                self.assertEqual(result['box'], (100, 100, 180, 180))
-                self.assertGreaterEqual(result['confidence'], 90.0)
-                self.assertEqual(len(result['all_faces']), 2)
-                self.assertTrue(result['all_faces'][0]['is_primary'])
-                self.assertTrue(result['all_faces'][1]['is_bystander'])
+                from attendance.biometrics import recognize_face_in_frame
+                with patch('pathlib.Path.exists', return_value=True):
+                    result = recognize_face_in_frame(self.company_a, dummy_img)
+                    self.assertTrue(result['matched'])
+                    self.assertTrue(result['access_granted'])
+                    self.assertEqual(result['box'], (100, 100, 180, 180))
+                    self.assertGreaterEqual(result['confidence'], 90.0)
+                    self.assertEqual(len(result['all_faces']), 2)
+                    self.assertTrue(result['all_faces'][0]['is_primary'])
+                    self.assertTrue(result['all_faces'][1]['is_bystander'])
 
-                # Test Candidate Pool Exclusion (e.g. employee already punched in)
-                res_excluded = recognize_face_in_frame(
-                    self.company_a, dummy_img, eligible_employee_ids=set()
-                )
-                self.assertTrue(res_excluded['matched'])
-                self.assertFalse(res_excluded['access_granted'])
-                self.assertTrue(res_excluded.get('already_punched'))
-                self.assertTrue(res_excluded.get('skip_to_next'))
-                self.assertIn('already completed', res_excluded['message'])
+                    res_excluded = recognize_face_in_frame(
+                        self.company_a, dummy_img, eligible_employee_ids=set()
+                    )
+                    self.assertTrue(res_excluded['matched'])
+                    self.assertFalse(res_excluded['access_granted'])
+                    self.assertTrue(res_excluded.get('already_punched'))
+                    self.assertTrue(res_excluded.get('skip_to_next'))
+                    self.assertIn('already completed', res_excluded['message'])
+
+    def test_closest_person_priority_and_candidate_exclusion_onnx(self):
+        """ONNX engine prioritizes closest face and enforces candidate eligibility with deep embeddings."""
+        import numpy as np
+        from unittest.mock import patch, MagicMock
+        from django.test import override_settings
+
+        dummy_img = np.zeros((480, 640, 3), dtype=np.uint8)
+        mock_faces = [(100, 100, 180, 180), (350, 120, 70, 70)]
+
+        dummy_vec = np.ones(128, dtype=np.float32)
+        dummy_vec = dummy_vec / np.linalg.norm(dummy_vec)
+
+        with override_settings(BIOMETRIC_ENGINE='onnx'):
+            with patch('attendance.biometrics.detect_faces', return_value=mock_faces), \
+                 patch('attendance.biometrics.get_onnx_session', return_value=MagicMock()), \
+                 patch('attendance.biometrics.get_cached_onnx_embeddings', return_value={self.emp_a.id: dummy_vec}), \
+                 patch('attendance.biometrics.compute_onnx_face_embedding', return_value=dummy_vec), \
+                 patch('attendance.biometrics.check_face_liveness_and_quality', return_value=(True, "OK", 50.0)):
+
+                from attendance.biometrics import recognize_face_in_frame
+                with patch('pathlib.Path.exists', return_value=True):
+                    result = recognize_face_in_frame(self.company_a, dummy_img)
+                    self.assertTrue(result['matched'])
+                    self.assertTrue(result['access_granted'])
+                    self.assertEqual(result['engine'], 'onnx')
+                    self.assertEqual(result['box'], (100, 100, 180, 180))
+                    self.assertGreaterEqual(result['confidence'], 95.0)
+                    self.assertTrue(result['all_faces'][0]['is_primary'])
+                    self.assertTrue(result['all_faces'][1]['is_bystander'])
+
+                    res_excluded = recognize_face_in_frame(
+                        self.company_a, dummy_img, eligible_employee_ids=set()
+                    )
+                    self.assertTrue(res_excluded['matched'])
+                    self.assertFalse(res_excluded['access_granted'])
+                    self.assertTrue(res_excluded.get('already_punched'))
+                    self.assertTrue(res_excluded.get('skip_to_next'))
+
 
 
