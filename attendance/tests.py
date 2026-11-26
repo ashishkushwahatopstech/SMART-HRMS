@@ -241,6 +241,41 @@ class AttendanceViewsAndSecurityTests(TestCase):
         # Beta employee record MUST NOT be visible
         self.assertNotContains(response, 'Karan Johar')
 
+    def test_attendance_list_view_modes(self):
+        """Attendance list view supports log, by_date, and by_employee modes."""
+        self.client.login(username='hr_alpha', password='Password@123')
+
+        # 1. Log view (default)
+        res_log = self.client.get(reverse('attendance:list') + '?view=log')
+        self.assertEqual(res_log.status_code, 200)
+        self.assertContains(res_log, 'Vikram Nair')
+        self.assertContains(res_log, 'slide-detail-')
+
+        # 2. By Date view
+        res_date = self.client.get(reverse('attendance:list') + '?view=by_date')
+        self.assertEqual(res_date.status_code, 200)
+        self.assertContains(res_date, 'Vikram Nair')
+        self.assertContains(res_date, 'date-roster-')
+
+        # 3. By Employee view
+        res_emp = self.client.get(reverse('attendance:list') + '?view=by_employee')
+        self.assertEqual(res_emp.status_code, 200)
+        self.assertContains(res_emp, 'Vikram Nair')
+        self.assertContains(res_emp, 'Attendance History')
+
+    def test_attendance_list_clever_lunch_display(self):
+        """Attendance list cleanly displays lunch break without interrupting punch flow."""
+        self.client.login(username='hr_alpha', password='Password@123')
+        self.att_a.lunch_start_time = timezone.make_aware(datetime(2026, 11, 24, 13, 0))
+        self.att_a.lunch_end_time = timezone.make_aware(datetime(2026, 11, 24, 13, 45))
+        self.att_a.total_lunch_duration_minutes = 45
+        self.att_a.save()
+
+        res = self.client.get(reverse('attendance:list'))
+        self.assertEqual(res.status_code, 200)
+        self.assertContains(res, '45m')
+        self.assertContains(res, 'punch-lunch-pill')
+
     def test_employee_privacy_safeguard(self):
         """Regular employee can view own record, but cannot view peer records."""
         self.client.login(username='emp_alpha', password='Password@123')

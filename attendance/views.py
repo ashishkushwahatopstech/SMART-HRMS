@@ -119,9 +119,125 @@ def attendance_list(request):
     dept_qs_company = user_company or Company.objects.filter(is_active=True).first()
     departments = Department.objects.filter(company=dept_qs_company) if dept_qs_company else Department.objects.all()
 
-    paginator = Paginator(attendances, 15)
+    # View Mode: 'log' (default list), 'by_date' (date-centric), 'by_employee' (employee-centric)
+    view_mode = request.GET.get('view', 'log').strip().lower()
+    if view_mode not in ['log', 'by_date', 'by_employee']:
+        view_mode = 'log'
+
+    # URL query string helpers so view switching and pagination preserve filters
+    query_params = request.GET.copy()
+    query_params.pop('page', None)
+    base_qs = query_params.urlencode()
+
+    query_params_no_view = query_params.copy()
+    query_params_no_view.pop('view', None)
+    filter_qs = query_params_no_view.urlencode()
+
     page_number = request.GET.get('page')
-    page_obj = paginator.get_page(page_number)
+    date_groups = []
+    employee_groups = []
+
+    if view_mode == 'by_date':
+        # Group attendance records by distinct dates
+        distinct_dates = attendances.order_by('-date').values_list('date', flat=True).distinct()
+        date_paginator = Paginator(distinct_dates, 7)
+        page_obj = date_paginator.get_page(page_number)
+        current_dates = list(page_obj)
+
+        if current_dates:
+            date_attendances = attendances.filter(date__in=current_dates).select_related(
+                'employee', 'company', 'shift', 'employee__department', 'employee__designation'
+            ).order_by('-date', 'employee__first_name', 'employee__last_name')
+
+            from collections import defaultdict
+            records_by_date = defaultdict(list)
+            for att in date_attendances:
+                records_by_date[att.date].append(att)
+
+            for dt in current_dates:
+                records = records_by_date[dt]
+                p_cnt = sum(1 for r in records if r.status == Attendance.AttendanceStatus.PRESENT)
+                l_cnt = sum(1 for r in records if r.is_late)
+                h_cnt = sum(1 for r in records if r.status == Attendance.AttendanceStatus.HALF_DAY)
+                a_cnt = sum(1 for r in records if r.status == Attendance.AttendanceStatus.ABSENT)
+                lunch_active_cnt = sum(1 for r in records if r.lunch_start_time and not r.lunch_end_time)
+                tot_hours = sum((r.total_working_hours for r in records if r.total_working_hours), Decimal('0.00'))
+                tot_ot = sum((r.overtime_hours for r in records if r.overtime_hours), Decimal('0.00'))
+
+                date_groups.append({
+                    'date': dt,
+                    'records': records,
+                    'total': len(records),
+                    'present_count': p_cnt,
+                    'late_count': l_cnt,
+                    'half_day_count': h_cnt,
+                    'absent_count': a_cnt,
+                    'lunch_active_count': lunch_active_cnt,
+                    'total_hours': tot_hours,
+                    'total_ot': tot_ot,
+                })
+
+    elif view_mode == 'by_employee':
+        # Group attendance records by employee
+        emp_qs = Employee.objects.select_related('department', 'designation', 'assigned_shift', 'company')
+        if user_company:
+            emp_qs = emp_qs.filter(company=user_company)
+        if request.user.role == 'manager' and not request.user.is_hr_admin:
+            manager_emp = getattr(request.user, 'employee_profile', None)
+            if manager_emp:
+                emp_qs = emp_qs.filter(Q(manager=manager_emp) | Q(department=manager_emp.department))
+            else:
+                emp_qs = emp_qs.none()
+        if query:
+            emp_qs = emp_qs.filter(
+                Q(first_name__icontains=query) |
+                Q(last_name__icontains=query) |
+                Q(employee_id__icontains=query)
+            )
+        if dept_id:
+            emp_qs = emp_qs.filter(department_id=dept_id)
+        if shift_id:
+            emp_qs = emp_qs.filter(assigned_shift_id=shift_id)
+
+        emp_qs = emp_qs.exclude(employment_status__in=['terminated', 'resigned']).order_by('first_name', 'last_name')
+        emp_paginator = Paginator(emp_qs, 12)
+        page_obj = emp_paginator.get_page(page_number)
+        current_employees = list(page_obj)
+
+        if current_employees:
+            emp_attendances = attendances.filter(employee__in=current_employees).order_by('-date', '-check_in_time')
+            from collections import defaultdict
+            att_by_emp = defaultdict(list)
+            for att in emp_attendances:
+                att_by_emp[att.employee_id].append(att)
+
+            today_val = timezone.localdate()
+            for emp in current_employees:
+                records = att_by_emp[emp.id]
+                tot_days = len(records)
+                p_cnt = sum(1 for r in records if r.status in [Attendance.AttendanceStatus.PRESENT, Attendance.AttendanceStatus.HALF_DAY])
+                l_cnt = sum(1 for r in records if r.is_late)
+                a_cnt = sum(1 for r in records if r.status == Attendance.AttendanceStatus.ABSENT)
+                tot_hours = sum((r.total_working_hours for r in records if r.total_working_hours), Decimal('0.00'))
+                tot_ot = sum((r.overtime_hours for r in records if r.overtime_hours), Decimal('0.00'))
+                today_record = next((r for r in records if r.date == today_val), None)
+
+                employee_groups.append({
+                    'employee': emp,
+                    'records': records[:25],
+                    'total_records_count': tot_days,
+                    'present_count': p_cnt,
+                    'late_count': l_cnt,
+                    'absent_count': a_cnt,
+                    'total_hours': tot_hours,
+                    'total_ot': tot_ot,
+                    'today_record': today_record,
+                })
+
+    else:
+        # Default: log view
+        paginator = Paginator(attendances, 15)
+        page_obj = paginator.get_page(page_number)
 
     return render(request, 'attendance/attendance_list.html', {
         'page_obj': page_obj,
@@ -132,6 +248,11 @@ def attendance_list(request):
         'date_to': date_to,
         'departments': departments,
         'selected_department': request.GET.get('department', ''),
+        'view_mode': view_mode,
+        'date_groups': date_groups,
+        'employee_groups': employee_groups,
+        'base_qs': base_qs,
+        'filter_qs': filter_qs,
     })
 
 

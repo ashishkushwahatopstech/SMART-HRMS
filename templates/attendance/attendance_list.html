@@ -3,65 +3,241 @@
 {% block title %}Attendance Log &mdash; Smart HRMS{% endblock %}
 {% block page_title %}Daily Attendance Records{% endblock %}
 
+{% block extra_head %}
+<style>
+/* Punch Flow & Clever Lunch Badges */
+.punch-journey-container {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+    flex-wrap: nowrap;
+}
+.punch-time-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.25rem;
+    padding: 0.22rem 0.55rem;
+    border-radius: 6px;
+    font-size: 0.76rem;
+    font-family: var(--bs-font-monospace, monospace);
+    font-weight: 600;
+    white-space: nowrap;
+}
+.punch-time-badge.in {
+    background-color: #ecfdf5;
+    color: #047857;
+    border: 1px solid #a7f3d0;
+}
+.punch-time-badge.out {
+    background-color: #eff6ff;
+    color: #1d4ed8;
+    border: 1px solid #bfdbfe;
+}
+.punch-time-badge.pending {
+    background-color: #f8fafc;
+    color: #94a3b8;
+    border: 1px dashed #cbd5e1;
+}
+
+/* Clever, Unobtrusive Lunch Break Pill */
+.punch-lunch-pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.25rem;
+    padding: 0.2rem 0.5rem;
+    border-radius: 9999px;
+    font-size: 0.72rem;
+    font-weight: 600;
+    background-color: #fffbeb;
+    color: #92400e;
+    border: 1px solid #fde68a;
+    cursor: pointer;
+    transition: all 0.15s ease-in-out;
+}
+.punch-lunch-pill:hover {
+    background-color: #fef3c7;
+    border-color: #f59e0b;
+    transform: translateY(-1px);
+    box-shadow: 0 2px 4px rgba(245, 158, 11, 0.15);
+}
+.punch-lunch-pill.pulse {
+    background-color: #fef08a;
+    color: #854d0e;
+    border-color: #eab308;
+    animation: lunchPulse 2s infinite;
+}
+@keyframes lunchPulse {
+    0% { box-shadow: 0 0 0 0 rgba(234, 179, 8, 0.4); }
+    70% { box-shadow: 0 0 0 6px rgba(234, 179, 8, 0); }
+    100% { box-shadow: 0 0 0 0 rgba(234, 179, 8, 0); }
+}
+
+/* Slide-Down Row styling */
+.slide-down-trigger {
+    cursor: pointer;
+}
+.slide-down-trigger:hover {
+    background-color: rgba(13, 110, 253, 0.03);
+}
+.detail-slide-row {
+    background-color: #f8fafc !important;
+}
+.detail-slide-content {
+    animation: fadeInSlide 0.2s ease-out;
+}
+@keyframes fadeInSlide {
+    from { opacity: 0; transform: translateY(-4px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+
+.timeline-step {
+    position: relative;
+    padding-left: 1.5rem;
+    padding-bottom: 0.75rem;
+}
+.timeline-step:last-child {
+    padding-bottom: 0;
+}
+.timeline-step::before {
+    content: '';
+    position: absolute;
+    left: 0.35rem;
+    top: 0.75rem;
+    bottom: 0;
+    width: 2px;
+    background-color: #e2e8f0;
+}
+.timeline-step:last-child::before {
+    display: none;
+}
+.timeline-step-dot {
+    position: absolute;
+    left: 0;
+    top: 0.2rem;
+    width: 14px;
+    height: 14px;
+    border-radius: 50%;
+    border: 2px solid #fff;
+    box-shadow: 0 0 0 1px #cbd5e1;
+}
+
+/* View Mode Segmented Switcher */
+.view-switch-btn {
+    font-size: 0.8rem;
+    font-weight: 600;
+    padding: 0.35rem 0.75rem;
+}
+
+/* Mobile Responsiveness */
+@media (max-width: 767.98px) {
+    .punch-journey-container {
+        flex-wrap: wrap;
+        gap: 0.25rem;
+    }
+    .punch-time-badge {
+        font-size: 0.72rem;
+        padding: 0.18rem 0.4rem;
+    }
+    .mobile-hide-col {
+        display: none !important;
+    }
+    .table-compact td, .table-compact th {
+        padding: 0.5rem 0.4rem !important;
+    }
+    .btn-responsive-text span {
+        display: none;
+    }
+}
+</style>
+{% endblock %}
+
 {% block content %}
-<div class="d-flex flex-column flex-sm-row justify-content-between align-items-start align-items-sm-center gap-3 mb-4">
+<!-- Top Header & Actions Bar -->
+<div class="d-flex flex-column flex-lg-row justify-content-between align-items-start align-items-lg-center gap-3 mb-4">
     <div>
-        <h4 class="fw-bold mb-1 text-dark">
-            <i class="bi bi-calendar-check text-primary me-2"></i> Attendance Log
-        </h4>
-        <p class="text-muted small mb-0">Daily employee check-in & check-out logs, punctuality audits, and overtime hours</p>
+        <div class="d-flex align-items-center gap-2">
+            <h4 class="fw-bold mb-0 text-dark">
+                <i class="bi bi-calendar-check text-primary me-2"></i> Attendance Log
+            </h4>
+            <span class="badge bg-primary-subtle text-primary border border-primary-subtle rounded-pill">
+                {% if view_mode == 'by_date' %}Date Wise View{% elif view_mode == 'by_employee' %}Employee Wise View{% else %}Chronological Log{% endif %}
+            </span>
+        </div>
+        <p class="text-muted small mb-0 mt-1">Daily employee check-in & check-out logs, lunch breaks, and punctuality tracking</p>
     </div>
-    <div class="d-flex flex-wrap gap-2">
+
+    <!-- Right Top: Arrange / Show Mode & Quick Action Buttons -->
+    <div class="d-flex flex-wrap align-items-center gap-2 ms-auto ms-lg-0">
+        <!-- View Mode Switcher -->
+        <div class="btn-group shadow-sm bg-white p-1 rounded-3 border" role="group" aria-label="Attendance Arrangement Mode">
+            <a href="?{% if filter_qs %}{{ filter_qs }}&{% endif %}view=log"
+               class="btn btn-sm view-switch-btn {% if view_mode == 'log' %}btn-primary active text-white shadow-sm{% else %}btn-light text-secondary border-0{% endif %}"
+               title="Detailed Chronological Logs with expandable rows">
+                <i class="bi bi-list-task me-1"></i> Logs
+            </a>
+            <a href="?{% if filter_qs %}{{ filter_qs }}&{% endif %}view=by_date"
+               class="btn btn-sm view-switch-btn {% if view_mode == 'by_date' %}btn-primary active text-white shadow-sm{% else %}btn-light text-secondary border-0{% endif %}"
+               title="Group attendance records day by day">
+                <i class="bi bi-calendar3 me-1"></i> By Date
+            </a>
+            <a href="?{% if filter_qs %}{{ filter_qs }}&{% endif %}view=by_employee"
+               class="btn btn-sm view-switch-btn {% if view_mode == 'by_employee' %}btn-primary active text-white shadow-sm{% else %}btn-light text-secondary border-0{% endif %}"
+               title="Group attendance records by employee & view history">
+                <i class="bi bi-people-fill me-1"></i> By Employee
+            </a>
+        </div>
+
+        <!-- Camera & Tools -->
         {% if request.user.role in 'super_admin,hr_admin,manager' %}
         <a href="{% url 'attendance:face_kiosk' %}" class="btn btn-danger btn-sm fw-bold shadow-sm d-flex align-items-center gap-1">
-            <i class="bi bi-camera-video-fill"></i> Face Cam Attendance
+            <i class="bi bi-camera-video-fill"></i> <span class="d-none d-sm-inline">Face Cam Attendance</span>
         </a>
         {% endif %}
         <a href="{% url 'attendance:my_attendance' %}" class="btn btn-outline-primary btn-sm shadow-sm">
-            <i class="bi bi-person-badge me-1"></i> My Attendance
+            <i class="bi bi-person-badge me-1"></i> <span class="d-none d-sm-inline">My Attendance</span>
         </a>
         {% if request.user.is_hr_admin %}
-        <a href="{% url 'attendance:create' %}" class="btn btn-primary btn-sm shadow-sm">
-            <i class="bi bi-plus-circle me-1"></i> Manual Entry
+        <a href="{% url 'attendance:create' %}" class="btn btn-outline-success btn-sm shadow-sm" title="Add manual entry">
+            <i class="bi bi-plus-circle me-1"></i> <span class="d-none d-sm-inline">Manual Entry</span>
         </a>
         {% endif %}
     </div>
 </div>
 
 <!-- Summary Metric Cards -->
-<div class="row g-3 mb-4">
+<div class="row g-2 g-md-3 mb-4">
     <div class="col-6 col-md-4 col-xl-2">
-        <div class="card card-stat p-3 text-center border-start border-primary border-3">
+        <div class="card card-stat p-3 text-center border-start border-primary border-3 shadow-sm h-100">
             <div class="text-muted small fw-semibold">Total Records</div>
             <div class="fs-4 fw-bold text-dark mt-1">{{ stats.total|default:0 }}</div>
         </div>
     </div>
     <div class="col-6 col-md-4 col-xl-2">
-        <div class="card card-stat p-3 text-center border-start border-success border-3">
+        <div class="card card-stat p-3 text-center border-start border-success border-3 shadow-sm h-100">
             <div class="text-muted small fw-semibold">Present</div>
             <div class="fs-4 fw-bold text-success mt-1">{{ stats.present_count|default:0 }}</div>
         </div>
     </div>
     <div class="col-6 col-md-4 col-xl-2">
-        <div class="card card-stat p-3 text-center border-start border-warning border-3">
+        <div class="card card-stat p-3 text-center border-start border-warning border-3 shadow-sm h-100">
             <div class="text-muted small fw-semibold">Late Arrivals</div>
             <div class="fs-4 fw-bold text-warning mt-1">{{ stats.late_count|default:0 }}</div>
         </div>
     </div>
     <div class="col-6 col-md-4 col-xl-2">
-        <div class="card card-stat p-3 text-center border-start border-info border-3">
+        <div class="card card-stat p-3 text-center border-start border-info border-3 shadow-sm h-100">
             <div class="text-muted small fw-semibold">Half Days</div>
             <div class="fs-4 fw-bold text-info mt-1">{{ stats.half_day_count|default:0 }}</div>
         </div>
     </div>
     <div class="col-6 col-md-4 col-xl-2">
-        <div class="card card-stat p-3 text-center border-start border-danger border-3">
+        <div class="card card-stat p-3 text-center border-start border-danger border-3 shadow-sm h-100">
             <div class="text-muted small fw-semibold">Absent</div>
             <div class="fs-4 fw-bold text-danger mt-1">{{ stats.absent_count|default:0 }}</div>
         </div>
     </div>
     <div class="col-6 col-md-4 col-xl-2">
-        <div class="card card-stat p-3 text-center border-start border-secondary border-3">
+        <div class="card card-stat p-3 text-center border-start border-secondary border-3 shadow-sm h-100">
             <div class="text-muted small fw-semibold">Total Overtime</div>
             <div class="fs-4 fw-bold text-primary mt-1">{{ stats.total_overtime|default:"0.00" }}h</div>
         </div>
@@ -69,8 +245,9 @@
 </div>
 
 <!-- Search & Multi-Filter Bar -->
-<div class="card card-stat p-3 mb-4">
+<div class="card card-stat p-3 mb-4 shadow-sm border-0">
     <form method="get" class="row g-2 align-items-end">
+        <input type="hidden" name="view" value="{{ view_mode }}">
         <div class="col-md-3">
             <label class="form-label small fw-semibold text-muted mb-1">Search Employee</label>
             <input type="text" name="q" value="{{ query }}" class="form-control form-control-sm" placeholder="Name or Employee ID...">
@@ -92,11 +269,11 @@
             {{ filter_form.status }}
         </div>
         <div class="col-12 col-md-1 d-flex gap-1">
-            <button type="submit" class="btn btn-primary btn-sm w-100" title="Apply Filters">
+            <button type="submit" class="btn btn-primary btn-sm w-100 shadow-sm" title="Apply Filters">
                 <i class="bi bi-filter"></i>
             </button>
             {% if query or date_from or date_to or request.GET.department or request.GET.status or request.GET.shift %}
-                <a href="{% url 'attendance:list' %}" class="btn btn-outline-secondary btn-sm" title="Clear Filters">
+                <a href="{% url 'attendance:list' %}?view={{ view_mode }}" class="btn btn-outline-secondary btn-sm" title="Clear Filters">
                     <i class="bi bi-x-lg"></i>
                 </a>
             {% endif %}
@@ -107,14 +284,14 @@
 <!-- Department Group Stacks / Quick Filter Pills -->
 {% if departments %}
 <div class="d-flex align-items-center gap-2 mb-3 overflow-x-auto pb-1">
-    <span class="text-muted small fw-semibold text-nowrap"><i class="bi bi-diagram-3-fill text-primary me-1"></i> Department Groups:</span>
-    <a href="{% url 'attendance:list' %}{% if query %}?q={{ query }}{% endif %}{% if date_from %}&date_from={{ date_from }}{% endif %}{% if date_to %}&date_to={{ date_to }}{% endif %}"
+    <span class="text-muted small fw-semibold text-nowrap"><i class="bi bi-diagram-3-fill text-primary me-1"></i> Departments:</span>
+    <a href="{% url 'attendance:list' %}?view={{ view_mode }}{% if query %}&q={{ query }}{% endif %}{% if date_from %}&date_from={{ date_from }}{% endif %}{% if date_to %}&date_to={{ date_to }}{% endif %}"
        class="badge text-decoration-none {% if not request.GET.department %}bg-dark text-white{% else %}bg-white text-dark border{% endif %} px-3 py-2 shadow-sm rounded-pill"
        style="font-size: 0.78rem;">
-        All Departments ({{ stats.total|default:0 }})
+        All ({{ stats.total|default:0 }})
     </a>
     {% for dept in departments %}
-    <a href="{% url 'attendance:list' %}?department={{ dept.id }}{% if query %}&q={{ query }}{% endif %}{% if date_from %}&date_from={{ date_from }}{% endif %}{% if date_to %}&date_to={{ date_to }}{% endif %}"
+    <a href="{% url 'attendance:list' %}?department={{ dept.id }}&view={{ view_mode }}{% if query %}&q={{ query }}{% endif %}{% if date_from %}&date_from={{ date_from }}{% endif %}{% if date_to %}&date_to={{ date_to }}{% endif %}"
        class="badge text-decoration-none {% if request.GET.department == dept.id|stringformat:'s' %}bg-primary text-white{% else %}bg-white text-dark border{% endif %} px-3 py-2 shadow-sm rounded-pill"
        style="font-size: 0.78rem;">
         {{ dept.name }}
@@ -123,30 +300,35 @@
 </div>
 {% endif %}
 
-<!-- Attendance Roster Table -->
-<div class="card card-stat overflow-hidden shadow-sm border-0">
+<!-- ========================================================================= -->
+<!-- VIEW MODE 1: DETAILED LOG TABLE WITH INLINE SLIDE-DOWN & CLEVER LUNCH     -->
+<!-- ========================================================================= -->
+{% if view_mode == 'log' %}
+<div class="card card-stat overflow-hidden shadow-sm border-0 mb-3">
     <div class="table-responsive">
         <table class="table table-hover table-compact align-middle mb-0">
-            <thead class="table-light">
+            <thead class="table-light text-muted small text-uppercase fw-semibold" style="letter-spacing: 0.5px;">
                 <tr>
-                    <th scope="col" style="min-width: 170px;">Employee</th>
-                    <th scope="col" style="min-width: 140px;">Date & Shift</th>
-                    <th scope="col" style="min-width: 180px;">Punch In & Out</th>
-                    <th scope="col" style="min-width: 110px;">Duration</th>
-                    <th scope="col" style="min-width: 130px;">Status</th>
-                    <th scope="col" class="text-end sticky-action-col" style="min-width: 105px;">Actions</th>
+                    <th scope="col" style="min-width: 180px;">Employee</th>
+                    <th scope="col" style="min-width: 130px;">Date & Shift</th>
+                    <th scope="col" style="min-width: 210px;">Punches & Lunch</th>
+                    <th scope="col" style="min-width: 100px;">Worked</th>
+                    <th scope="col" style="min-width: 110px;">Status</th>
+                    <th scope="col" class="text-end" style="min-width: 90px;">Details</th>
                 </tr>
             </thead>
             <tbody>
                 {% for att in page_obj %}
-                <tr>
+                <!-- Main Visible Row (Clean, Front Columns) -->
+                <tr class="slide-down-trigger" data-bs-toggle="collapse" data-bs-target="#slide-detail-{{ att.pk }}" aria-expanded="false" aria-controls="slide-detail-{{ att.pk }}">
+                    <!-- Column 1: Employee -->
                     <td>
                         <div class="d-flex align-items-center gap-2">
-                            <span class="avatar-circle-sm bg-primary-subtle text-primary fw-bold flex-shrink-0" style="width: 32px; height: 32px; font-size: 0.75rem;">
+                            <span class="avatar-circle-sm bg-primary-subtle text-primary fw-bold flex-shrink-0" style="width: 34px; height: 34px; font-size: 0.75rem;">
                                 {{ att.employee.first_name|first }}{{ att.employee.last_name|first }}
                             </span>
-                            <div class="lh-sm text-truncate" style="max-width: 180px;">
-                                <a href="{% url 'employees:detail' att.employee.pk %}" class="fw-semibold text-dark text-decoration-none text-truncate d-block" title="{{ att.employee.get_full_name }}">
+                            <div class="lh-sm text-truncate" style="max-width: 190px;">
+                                <a href="{% url 'employees:detail' att.employee.pk %}" class="fw-semibold text-dark text-decoration-none text-truncate d-block" onclick="event.stopPropagation();" title="{{ att.employee.get_full_name }}">
                                     {{ att.employee.get_full_name }}
                                 </a>
                                 <span class="text-muted" style="font-size: 0.72rem;">
@@ -155,92 +337,209 @@
                             </div>
                         </div>
                     </td>
+
+                    <!-- Column 2: Date & Shift -->
                     <td>
                         <div class="fw-semibold text-dark lh-sm" style="font-size: 0.85rem;">{{ att.date|date:"d M Y" }}</div>
                         <div class="d-flex align-items-center gap-1 mt-1 flex-wrap">
                             <span class="text-muted" style="font-size: 0.72rem;">{{ att.date|date:"D" }}</span>
                             {% if att.shift %}
                                 <span class="badge bg-light text-secondary border font-monospace px-1 py-0" style="font-size: 0.68rem;" title="{{ att.shift.name }}: {{ att.shift.start_time|time:'H:i' }} - {{ att.shift.end_time|time:'H:i' }}">
-                                    {{ att.shift.name|truncatechars:10 }} ({{ att.shift.start_time|time:"H:i" }}&ndash;{{ att.shift.end_time|time:"H:i" }})
+                                    {{ att.shift.name|truncatechars:9 }}
                                 </span>
                             {% endif %}
                         </div>
                     </td>
+
+                    <!-- Column 3: Punches & Clever Lunch Representation -->
                     <td>
-                        <!-- Side-by-Side Punch In & Out -->
-                        <div class="d-inline-flex align-items-center gap-1 flex-nowrap" style="font-size: 0.78rem;">
-                            <!-- Punch In with time -->
+                        <div class="punch-journey-container">
+                            <!-- Punch In -->
                             {% if att.check_in_time %}
-                                <span class="badge bg-success-subtle text-success border border-success-subtle font-monospace px-2 py-1" title="Punch In: {{ att.check_in_time|date:'h:i A' }} ({{ att.get_verification_method_display }})">
-                                    <i class="bi bi-box-arrow-in-right me-1"></i>{{ att.check_in_time|date:"h:i A" }}
+                                <span class="punch-time-badge in" title="Punch In: {{ att.check_in_time|date:'h:i A' }} ({{ att.get_verification_method_display }})">
+                                    <i class="bi bi-box-arrow-in-right"></i> {{ att.check_in_time|date:"h:i A" }}
                                 </span>
                             {% else %}
-                                <span class="badge bg-light text-muted border border-dashed font-monospace px-2 py-1">&mdash;&mdash;</span>
+                                <span class="punch-time-badge pending" title="Not Checked In">&mdash;&mdash;</span>
                             {% endif %}
 
-                            <!-- Lunch Break Badge -->
+                            <!-- Clever Lunch Pill (Unobtrusive) -->
                             {% if att.lunch_start_time and att.lunch_end_time %}
-                                <span class="badge bg-warning-subtle text-dark border border-warning-subtle font-monospace px-2 py-1" title="Lunch Break: {{ att.lunch_start_time|date:'h:i A' }} - {{ att.lunch_end_time|date:'h:i A' }} ({{ att.total_lunch_duration_minutes }}m)">
-                                    <i class="bi bi-cup-hot me-1 text-warning"></i>{{ att.lunch_start_time|date:"h:i A" }}
+                                <span class="punch-lunch-pill" data-bs-toggle="tooltip" data-bs-placement="top"
+                                      title="Lunch Break: {{ att.lunch_start_time|date:'h:i A' }} &rarr; {{ att.lunch_end_time|date:'h:i A' }} ({{ att.total_lunch_duration_minutes }}m break deducted)">
+                                    <i class="bi bi-cup-hot-fill"></i> {{ att.total_lunch_duration_minutes }}m
                                 </span>
                             {% elif att.lunch_start_time %}
-                                <span class="badge bg-warning text-dark font-monospace px-2 py-1" title="On Lunch since {{ att.lunch_start_time|date:'h:i A' }}">
-                                    <i class="bi bi-cup-hot-fill me-1"></i>Lunch...
-                                </span>
-                            {% endif %}
-
-                            <!-- Punch Out: Blank dashed placeholder until punched out -->
-                            {% if att.check_out_time %}
-                                <span class="badge bg-primary-subtle text-primary border border-primary-subtle font-monospace px-2 py-1" title="Punch Out: {{ att.check_out_time|date:'h:i A' }}">
-                                    <i class="bi bi-box-arrow-right me-1"></i>{{ att.check_out_time|date:"h:i A" }}
+                                <span class="punch-lunch-pill pulse" data-bs-toggle="tooltip" data-bs-placement="top"
+                                      title="Currently on lunch break since {{ att.lunch_start_time|date:'h:i A' }}">
+                                    <i class="bi bi-cup-hot-fill"></i> On Lunch
                                 </span>
                             {% else %}
-                                <span class="badge bg-light text-muted border border-dashed font-monospace px-2 py-1" style="min-width: 65px; text-align: center;" title="Punch Out Pending">&mdash;&mdash;</span>
+                                <span class="text-muted small px-1">&rarr;</span>
+                            {% endif %}
+
+                            <!-- Punch Out -->
+                            {% if att.check_out_time %}
+                                <span class="punch-time-badge out" title="Punch Out: {{ att.check_out_time|date:'h:i A' }}">
+                                    <i class="bi bi-box-arrow-right"></i> {{ att.check_out_time|date:"h:i A" }}
+                                </span>
+                            {% else %}
+                                <span class="punch-time-badge pending" title="Punch Out Pending">&mdash; : &mdash;</span>
                             {% endif %}
                         </div>
                     </td>
+
+                    <!-- Column 4: Worked Hours -->
                     <td>
-                        <div class="fw-bold text-dark" style="font-size: 0.85rem;">{{ att.total_working_hours }} hrs</div>
+                        <div class="fw-bold text-dark font-monospace" style="font-size: 0.85rem;">{{ att.total_working_hours }}h</div>
                         {% if att.overtime_hours > 0 %}
-                            <span class="badge bg-success-subtle text-success border border-success-subtle mt-1" style="font-size: 0.68rem;">
+                            <span class="badge bg-success-subtle text-success border border-success-subtle" style="font-size: 0.68rem;">
                                 +{{ att.overtime_hours }}h OT
                             </span>
-                        {% else %}
-                            <span class="text-muted" style="font-size: 0.7rem;">0 OT</span>
                         {% endif %}
                     </td>
+
+                    <!-- Column 5: Status & Punctuality -->
                     <td>
-                        <span class="badge {{ att.get_status_badge_class }} d-inline-block mb-1" style="font-size: 0.72rem;">
+                        <span class="badge {{ att.get_status_badge_class }} d-inline-block" style="font-size: 0.72rem;">
                             {{ att.get_status_display }}
                         </span>
-                        <div>
-                            {% if att.is_late %}
+                        {% if att.is_late %}
+                            <div class="mt-1">
                                 <span class="badge bg-warning-subtle text-dark border border-warning-subtle" style="font-size: 0.66rem;" title="{{ att.late_minutes }}m late">
                                     Late {{ att.late_minutes }}m
                                 </span>
-                            {% elif att.check_in_time %}
-                                <span class="badge bg-success-subtle text-success border border-success-subtle" style="font-size: 0.66rem;">On Time</span>
-                            {% endif %}
-                            {% if att.is_early_departure %}
-                                <span class="badge bg-danger-subtle text-danger border border-danger-subtle" style="font-size: 0.66rem;" title="{{ att.early_departure_minutes }}m early departure">
-                                    Early -{{ att.early_departure_minutes }}m
-                                </span>
-                            {% endif %}
-                        </div>
+                            </div>
+                        {% endif %}
                     </td>
-                    <td class="text-end sticky-action-col">
-                        <div class="btn-group btn-group-sm">
-                            <a href="{% url 'attendance:detail' att.pk %}" class="btn btn-outline-primary btn-sm px-2 py-1" title="View Breakdown & Audit Log">
-                                <i class="bi bi-eye"></i>
-                            </a>
-                            {% if request.user.is_hr_admin %}
-                            <a href="{% url 'attendance:edit' att.pk %}" class="btn btn-outline-secondary btn-sm px-2 py-1" title="Adjust Attendance Record">
-                                <i class="bi bi-pencil"></i>
-                            </a>
-                            <a href="{% url 'attendance:delete' att.pk %}?next={{ request.get_full_path|urlencode }}" class="btn btn-outline-danger btn-sm px-2 py-1" title="Delete Record">
-                                <i class="bi bi-trash"></i>
-                            </a>
-                            {% endif %}
+
+                    <!-- Column 6: Slide-down Toggle Chevron & Action -->
+                    <td class="text-end">
+                        <button type="button" class="btn btn-sm btn-outline-secondary px-2 py-1 shadow-none border-0"
+                                data-bs-toggle="collapse" data-bs-target="#slide-detail-{{ att.pk }}"
+                                title="Click to slide down complete audit details">
+                            <i class="bi bi-chevron-down text-primary fw-bold"></i>
+                        </button>
+                    </td>
+                </tr>
+
+                <!-- Expandable Slide-Down Row (Rich Secondary Fields) -->
+                <tr class="collapse detail-slide-row" id="slide-detail-{{ att.pk }}">
+                    <td colspan="6" class="p-3 border-top-0">
+                        <div class="detail-slide-content p-3 bg-white rounded-3 shadow-sm border">
+                            <div class="row g-3">
+                                <!-- Card 1: Complete Punch & Lunch Timeline Journey -->
+                                <div class="col-12 col-md-4">
+                                    <h6 class="fw-bold text-dark mb-3" style="font-size: 0.82rem;">
+                                        <i class="bi bi-clock-history text-primary me-1"></i> Punch & Lunch Sequence
+                                    </h6>
+                                    <div class="ps-1">
+                                        <!-- Check In -->
+                                        <div class="timeline-step">
+                                            <span class="timeline-step-dot bg-success"></span>
+                                            <div class="small fw-bold text-dark">Check In</div>
+                                            <div class="font-monospace text-success fw-semibold small">
+                                                {{ att.check_in_time|date:"h:i:s A"|default:"Not Recorded" }}
+                                            </div>
+                                            <span class="text-muted" style="font-size: 0.72rem;">Method: {{ att.get_verification_method_display }}</span>
+                                        </div>
+
+                                        <!-- Lunch Break -->
+                                        <div class="timeline-step">
+                                            <span class="timeline-step-dot bg-warning"></span>
+                                            <div class="small fw-bold text-dark">Lunch Break</div>
+                                            {% if att.lunch_start_time %}
+                                                <div class="font-monospace text-dark small">
+                                                    Out: <strong>{{ att.lunch_start_time|date:"h:i A" }}</strong> &bull; In: <strong>{{ att.lunch_end_time|date:"h:i A"|default:"On Break" }}</strong>
+                                                </div>
+                                                <span class="badge bg-warning-subtle text-dark border border-warning-subtle font-monospace mt-1" style="font-size: 0.7rem;">
+                                                    <i class="bi bi-cup-hot me-1"></i>{{ att.total_lunch_duration_minutes|default:0 }} minutes break deducted
+                                                </span>
+                                            {% else %}
+                                                <span class="text-muted small">No lunch break logged today</span>
+                                            {% endif %}
+                                        </div>
+
+                                        <!-- Check Out -->
+                                        <div class="timeline-step">
+                                            <span class="timeline-step-dot bg-primary"></span>
+                                            <div class="small fw-bold text-dark">Check Out</div>
+                                            <div class="font-monospace text-primary fw-semibold small">
+                                                {{ att.check_out_time|date:"h:i:s A"|default:"Pending Punch Out" }}
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <!-- Card 2: Shift Compliance & Punctuality -->
+                                <div class="col-12 col-md-4 border-start-md">
+                                    <h6 class="fw-bold text-dark mb-3" style="font-size: 0.82rem;">
+                                        <i class="bi bi-shield-check text-success me-1"></i> Compliance & Work Hours
+                                    </h6>
+                                    <ul class="list-unstyled small mb-0 lh-lg">
+                                        <li class="d-flex justify-content-between border-bottom pb-1 mb-1">
+                                            <span class="text-muted">Assigned Shift:</span>
+                                            <span class="fw-semibold text-dark">{{ att.shift.name|default:"General Shift" }} ({{ att.shift.start_time|time:"H:i" }} - {{ att.shift.end_time|time:"H:i" }})</span>
+                                        </li>
+                                        <li class="d-flex justify-content-between border-bottom pb-1 mb-1">
+                                            <span class="text-muted">Punctuality:</span>
+                                            {% if att.is_late %}
+                                                <span class="text-warning fw-bold">Late by {{ att.late_minutes }}m</span>
+                                            {% else %}
+                                                <span class="text-success fw-semibold">On Time (0 mins)</span>
+                                            {% endif %}
+                                        </li>
+                                        <li class="d-flex justify-content-between border-bottom pb-1 mb-1">
+                                            <span class="text-muted">Early Departure:</span>
+                                            {% if att.is_early_departure %}
+                                                <span class="text-danger fw-bold">Early by {{ att.early_departure_minutes }}m</span>
+                                            {% else %}
+                                                <span class="text-muted">None</span>
+                                            {% endif %}
+                                        </li>
+                                        <li class="d-flex justify-content-between border-bottom pb-1 mb-1">
+                                            <span class="text-muted">Net Working Hours:</span>
+                                            <span class="fw-bold text-dark font-monospace">{{ att.total_working_hours|default:"0.00" }} hrs</span>
+                                        </li>
+                                        <li class="d-flex justify-content-between">
+                                            <span class="text-muted">Overtime Hours:</span>
+                                            <span class="fw-semibold text-primary font-monospace">{{ att.overtime_hours|default:"0.00" }} hrs</span>
+                                        </li>
+                                    </ul>
+                                </div>
+
+                                <!-- Card 3: Verification, IP & Quick Actions -->
+                                <div class="col-12 col-md-4 border-start-md d-flex flex-column justify-content-between">
+                                    <div>
+                                        <h6 class="fw-bold text-dark mb-3" style="font-size: 0.82rem;">
+                                            <i class="bi bi-fingerprint text-secondary me-1"></i> Audit & Verification
+                                        </h6>
+                                        <div class="small text-muted mb-2 lh-base">
+                                            <div><strong>Verification Method:</strong> {{ att.get_verification_method_display }}</div>
+                                            <div><strong>IP Address:</strong> <span class="font-monospace text-dark">{{ att.ip_address|default:"127.0.0.1" }}</span></div>
+                                            {% if att.device_info %}
+                                                <div class="text-truncate" title="{{ att.device_info }}"><strong>Device:</strong> {{ att.device_info|truncatechars:35 }}</div>
+                                            {% endif %}
+                                            {% if att.notes %}
+                                                <div class="mt-1 p-2 bg-light rounded text-dark fst-italic">"{{ att.notes }}"</div>
+                                            {% endif %}
+                                        </div>
+                                    </div>
+                                    <div class="d-flex flex-wrap gap-2 pt-2 border-top">
+                                        <a href="{% url 'attendance:detail' att.pk %}" class="btn btn-primary btn-sm flex-grow-1 shadow-sm">
+                                            <i class="bi bi-box-arrow-up-right me-1"></i> Full Audit Record
+                                        </a>
+                                        {% if request.user.is_hr_admin %}
+                                        <a href="{% url 'attendance:edit' att.pk %}" class="btn btn-outline-secondary btn-sm" title="Edit Record">
+                                            <i class="bi bi-pencil"></i>
+                                        </a>
+                                        <a href="{% url 'attendance:delete' att.pk %}?next={{ request.get_full_path|urlencode }}" class="btn btn-outline-danger btn-sm" title="Delete Record">
+                                            <i class="bi bi-trash"></i>
+                                        </a>
+                                        {% endif %}
+                                    </div>
+                                </div>
+                            </div>
                         </div>
                     </td>
                 </tr>
@@ -257,16 +556,337 @@
         </table>
     </div>
 </div>
+{% endif %}
 
-<!-- Pagination Controls -->
+<!-- ========================================================================= -->
+<!-- VIEW MODE 2: BY DATE (DATE-CENTRIC ARRANGEMENT & DAILY ROSTER INSPECTION) -->
+<!-- ========================================================================= -->
+{% if view_mode == 'by_date' %}
+<div class="d-flex flex-column gap-3 mb-4">
+    {% for group in date_groups %}
+    <div class="card card-stat shadow-sm border-0 overflow-hidden">
+        <!-- Date Header & Group Summary Strip -->
+        <div class="card-header bg-white py-3 border-bottom d-flex flex-column flex-md-row justify-content-between align-items-start align-items-md-center gap-2 cursor-pointer"
+             data-bs-toggle="collapse" data-bs-target="#date-roster-{{ forloop.counter }}" aria-expanded="true" aria-controls="date-roster-{{ forloop.counter }}" style="cursor: pointer;">
+            <div class="d-flex align-items-center gap-2">
+                <span class="avatar-circle-sm bg-primary text-white fw-bold" style="width: 36px; height: 36px;">
+                    <i class="bi bi-calendar-event"></i>
+                </span>
+                <div>
+                    <h6 class="fw-bold text-dark mb-0 fs-6">
+                        {{ group.date|date:"l, d F Y" }}
+                    </h6>
+                    <span class="text-muted small">
+                        {{ group.total }} employee{{ group.total|pluralize }} recorded &bull; {{ group.total_hours|floatformat:1 }} total hours
+                    </span>
+                </div>
+            </div>
+
+            <!-- Group Metric Pills -->
+            <div class="d-flex align-items-center gap-2 flex-wrap">
+                <span class="badge bg-success-subtle text-success border border-success-subtle px-2 py-1">
+                    Present: {{ group.present_count }}
+                </span>
+                {% if group.late_count > 0 %}
+                <span class="badge bg-warning-subtle text-dark border border-warning-subtle px-2 py-1">
+                    Late: {{ group.late_count }}
+                </span>
+                {% endif %}
+                {% if group.lunch_active_count > 0 %}
+                <span class="badge bg-warning text-dark px-2 py-1">
+                    <i class="bi bi-cup-hot-fill me-1"></i>{{ group.lunch_active_count }} on Lunch
+                </span>
+                {% endif %}
+                {% if group.absent_count > 0 %}
+                <span class="badge bg-danger-subtle text-danger border border-danger-subtle px-2 py-1">
+                    Absent: {{ group.absent_count }}
+                </span>
+                {% endif %}
+
+                <!-- Collapse Toggle Icon -->
+                <button type="button" class="btn btn-sm btn-light border-0 ms-1 px-2 py-1">
+                    <i class="bi bi-chevron-down text-primary fw-bold"></i>
+                </button>
+            </div>
+        </div>
+
+        <!-- Date Roster Table (Collapsible) -->
+        <div class="collapse show" id="date-roster-{{ forloop.counter }}">
+            <div class="table-responsive">
+                <table class="table table-hover table-compact align-middle mb-0">
+                    <thead class="table-light text-muted small text-uppercase">
+                        <tr>
+                            <th style="min-width: 170px;">Employee</th>
+                            <th style="min-width: 120px;">Shift</th>
+                            <th style="min-width: 210px;">Punches & Lunch</th>
+                            <th style="min-width: 100px;">Worked</th>
+                            <th style="min-width: 110px;">Status</th>
+                            <th class="text-end" style="min-width: 90px;">Action</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for att in group.records %}
+                        <tr class="slide-down-trigger" data-bs-toggle="collapse" data-bs-target="#slide-date-{{ att.pk }}">
+                            <td>
+                                <div class="d-flex align-items-center gap-2">
+                                    <span class="avatar-circle-sm bg-primary-subtle text-primary fw-bold flex-shrink-0" style="width: 30px; height: 30px; font-size: 0.75rem;">
+                                        {{ att.employee.first_name|first }}{{ att.employee.last_name|first }}
+                                    </span>
+                                    <div class="lh-sm text-truncate" style="max-width: 180px;">
+                                        <a href="{% url 'employees:detail' att.employee.pk %}" class="fw-semibold text-dark text-decoration-none text-truncate d-block" onclick="event.stopPropagation();">
+                                            {{ att.employee.get_full_name }}
+                                        </a>
+                                        <span class="text-muted" style="font-size: 0.72rem;">{{ att.employee.employee_id }}</span>
+                                    </div>
+                                </div>
+                            </td>
+                            <td>
+                                <span class="badge bg-light text-secondary border font-monospace px-1 py-0" style="font-size: 0.72rem;">
+                                    {{ att.shift.name|default:"General" }}
+                                </span>
+                            </td>
+                            <td>
+                                <div class="punch-journey-container">
+                                    {% if att.check_in_time %}
+                                        <span class="punch-time-badge in"><i class="bi bi-box-arrow-in-right"></i> {{ att.check_in_time|date:"h:i A" }}</span>
+                                    {% else %}
+                                        <span class="punch-time-badge pending">&mdash;&mdash;</span>
+                                    {% endif %}
+
+                                    {% if att.lunch_start_time and att.lunch_end_time %}
+                                        <span class="punch-lunch-pill" data-bs-toggle="tooltip" title="Lunch: {{ att.lunch_start_time|date:'h:i A' }} &rarr; {{ att.lunch_end_time|date:'h:i A' }} ({{ att.total_lunch_duration_minutes }}m deducted)">
+                                            <i class="bi bi-cup-hot-fill"></i> {{ att.total_lunch_duration_minutes }}m
+                                        </span>
+                                    {% elif att.lunch_start_time %}
+                                        <span class="punch-lunch-pill pulse" data-bs-toggle="tooltip" title="Currently on lunch break">
+                                            <i class="bi bi-cup-hot-fill"></i> Lunch...
+                                        </span>
+                                    {% else %}
+                                        <span class="text-muted small px-1">&rarr;</span>
+                                    {% endif %}
+
+                                    {% if att.check_out_time %}
+                                        <span class="punch-time-badge out"><i class="bi bi-box-arrow-right"></i> {{ att.check_out_time|date:"h:i A" }}</span>
+                                    {% else %}
+                                        <span class="punch-time-badge pending">&mdash; : &mdash;</span>
+                                    {% endif %}
+                                </div>
+                            </td>
+                            <td>
+                                <span class="fw-bold text-dark font-monospace">{{ att.total_working_hours }}h</span>
+                            </td>
+                            <td>
+                                <span class="badge {{ att.get_status_badge_class }}" style="font-size: 0.72rem;">{{ att.get_status_display }}</span>
+                            </td>
+                            <td class="text-end">
+                                <a href="{% url 'attendance:detail' att.pk %}" class="btn btn-outline-primary btn-sm px-2 py-0" onclick="event.stopPropagation();" title="View Full Audit">
+                                    <i class="bi bi-eye"></i>
+                                </a>
+                            </td>
+                        </tr>
+
+                        <!-- Inline Slide-down for this record -->
+                        <tr class="collapse detail-slide-row" id="slide-date-{{ att.pk }}">
+                            <td colspan="6" class="p-3 border-top-0">
+                                <div class="detail-slide-content p-3 bg-white rounded-3 border">
+                                    <div class="row g-2">
+                                        <div class="col-md-6">
+                                            <div class="small fw-bold text-dark mb-1"><i class="bi bi-clock-history text-primary me-1"></i> Punches & Lunch Break</div>
+                                            <div class="small text-muted">
+                                                Check In: <strong class="text-dark">{{ att.check_in_time|date:"h:i A"|default:"None" }}</strong> &bull;
+                                                Lunch: <strong class="text-dark">{{ att.lunch_start_time|date:"h:i A"|default:"None" }} &rarr; {{ att.lunch_end_time|date:"h:i A"|default:"None" }} ({{ att.total_lunch_duration_minutes|default:0 }}m deducted)</strong> &bull;
+                                                Check Out: <strong class="text-dark">{{ att.check_out_time|date:"h:i A"|default:"Pending" }}</strong>
+                                            </div>
+                                        </div>
+                                        <div class="col-md-6 text-md-end">
+                                            <a href="{% url 'attendance:detail' att.pk %}" class="btn btn-primary btn-sm">Full Record Details &rarr;</a>
+                                        </div>
+                                    </div>
+                                </div>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+    {% empty %}
+    <div class="card card-stat text-center py-5">
+        <div class="text-muted mb-2"><i class="bi bi-calendar-x fs-1"></i></div>
+        <h6 class="text-dark fw-bold">No Attendance Records by Date</h6>
+        <p class="text-muted small">Try broadening your date filters or search parameters.</p>
+    </div>
+    {% endfor %}
+</div>
+{% endif %}
+
+<!-- ========================================================================= -->
+<!-- VIEW MODE 3: BY EMPLOYEE (EMPLOYEE-CENTRIC WITH EXPANDABLE HISTORY)       -->
+<!-- ========================================================================= -->
+{% if view_mode == 'by_employee' %}
+<div class="row g-3 mb-4">
+    {% for group in employee_groups %}
+    <div class="col-12 col-xl-6">
+        <div class="card card-stat shadow-sm border-0 h-100">
+            <!-- Employee Header -->
+            <div class="card-body p-3">
+                <div class="d-flex justify-content-between align-items-start gap-2 mb-2">
+                    <div class="d-flex align-items-center gap-3">
+                        <span class="avatar-circle-sm bg-primary-subtle text-primary fw-bold" style="width: 44px; height: 44px; font-size: 0.95rem;">
+                            {{ group.employee.first_name|first }}{{ group.employee.last_name|first }}
+                        </span>
+                        <div>
+                            <h6 class="fw-bold text-dark mb-0">
+                                <a href="{% url 'employees:detail' group.employee.pk %}" class="text-dark text-decoration-none">
+                                    {{ group.employee.get_full_name }}
+                                </a>
+                            </h6>
+                            <span class="text-muted small">
+                                {{ group.employee.employee_id }} &bull; {{ group.employee.department.name|default:"Unassigned" }} &bull; {{ group.employee.designation.title|default:"Staff" }}
+                            </span>
+                        </div>
+                    </div>
+
+                    <!-- Today's Live Status -->
+                    <div>
+                        {% if group.today_record %}
+                            {% if group.today_record.lunch_start_time and not group.today_record.lunch_end_time %}
+                                <span class="badge bg-warning text-dark font-monospace px-2 py-1 pulse">
+                                    <i class="bi bi-cup-hot-fill me-1"></i>On Lunch
+                                </span>
+                            {% elif group.today_record.check_out_time %}
+                                <span class="badge bg-primary-subtle text-primary border border-primary-subtle px-2 py-1">
+                                    <i class="bi bi-check-circle me-1"></i>Out ({{ group.today_record.check_out_time|date:"h:i A" }})
+                                </span>
+                            {% elif group.today_record.check_in_time %}
+                                <span class="badge bg-success-subtle text-success border border-success-subtle px-2 py-1">
+                                    <i class="bi bi-clock me-1"></i>In ({{ group.today_record.check_in_time|date:"h:i A" }})
+                                </span>
+                            {% else %}
+                                <span class="badge bg-light text-muted border px-2 py-1">Pending</span>
+                            {% endif %}
+                        {% else %}
+                            <span class="badge bg-light text-muted border px-2 py-1">Not Marked Today</span>
+                        {% endif %}
+                    </div>
+                </div>
+
+                <!-- Metrics Strip -->
+                <div class="row g-2 text-center my-2 p-2 bg-light rounded-3">
+                    <div class="col-3">
+                        <div class="text-muted" style="font-size: 0.72rem;">Days Present</div>
+                        <div class="fw-bold text-success fs-6">{{ group.present_count }}</div>
+                    </div>
+                    <div class="col-3">
+                        <div class="text-muted" style="font-size: 0.72rem;">Late Arrivals</div>
+                        <div class="fw-bold {% if group.late_count > 0 %}text-warning{% else %}text-muted{% endif %} fs-6">{{ group.late_count }}</div>
+                    </div>
+                    <div class="col-3">
+                        <div class="text-muted" style="font-size: 0.72rem;">Total Hours</div>
+                        <div class="fw-bold text-dark font-monospace fs-6">{{ group.total_hours|floatformat:1 }}h</div>
+                    </div>
+                    <div class="col-3">
+                        <div class="text-muted" style="font-size: 0.72rem;">Overtime</div>
+                        <div class="fw-bold text-primary font-monospace fs-6">{{ group.total_ot|floatformat:1 }}h</div>
+                    </div>
+                </div>
+
+                <!-- Footer Actions: Toggle History Drawer -->
+                <div class="d-flex justify-content-between align-items-center mt-3 pt-2 border-top">
+                    <button type="button" class="btn btn-outline-primary btn-sm d-flex align-items-center gap-1 shadow-sm"
+                            data-bs-toggle="collapse" data-bs-target="#emp-history-{{ group.employee.id }}"
+                            aria-expanded="false" aria-controls="emp-history-{{ group.employee.id }}">
+                        <i class="bi bi-clock-history"></i> Attendance History ({{ group.total_records_count }})
+                        <i class="bi bi-chevron-down ms-1"></i>
+                    </button>
+                    <a href="{% url 'employees:detail' group.employee.pk %}#attendance" class="btn btn-light btn-sm text-secondary border">
+                        <i class="bi bi-person-lines-fill me-1"></i> Profile &rarr;
+                    </a>
+                </div>
+
+                <!-- Slide-Down Attendance History Table -->
+                <div class="collapse mt-3" id="emp-history-{{ group.employee.id }}">
+                    <div class="border rounded-3 overflow-hidden">
+                        <div class="table-responsive" style="max-height: 280px;">
+                            <table class="table table-sm table-hover align-middle mb-0" style="font-size: 0.78rem;">
+                                <thead class="table-light text-muted">
+                                    <tr>
+                                        <th>Date</th>
+                                        <th>Punch In & Out</th>
+                                        <th>Lunch Break</th>
+                                        <th>Hours</th>
+                                        <th>Status</th>
+                                        <th class="text-end">View</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {% for r in group.records %}
+                                    <tr>
+                                        <td>
+                                            <div class="fw-semibold text-dark">{{ r.date|date:"d M" }}</div>
+                                            <span class="text-muted" style="font-size: 0.68rem;">{{ r.date|date:"D" }}</span>
+                                        </td>
+                                        <td>
+                                            <span class="font-monospace text-success">{{ r.check_in_time|date:"h:i A"|default:"--" }}</span>
+                                            <span class="text-muted">&rarr;</span>
+                                            <span class="font-monospace text-primary">{{ r.check_out_time|date:"h:i A"|default:"--" }}</span>
+                                        </td>
+                                        <td>
+                                            {% if r.lunch_start_time and r.lunch_end_time %}
+                                                <span class="punch-lunch-pill" title="{{ r.lunch_start_time|date:'h:i A' }} - {{ r.lunch_end_time|date:'h:i A' }}">
+                                                    <i class="bi bi-cup-hot-fill"></i> {{ r.total_lunch_duration_minutes }}m
+                                                </span>
+                                            {% elif r.lunch_start_time %}
+                                                <span class="badge bg-warning text-dark font-monospace">On Lunch</span>
+                                            {% else %}
+                                                <span class="text-muted">&mdash;</span>
+                                            {% endif %}
+                                        </td>
+                                        <td class="font-monospace fw-bold text-dark">{{ r.total_working_hours }}h</td>
+                                        <td>
+                                            <span class="badge {{ r.get_status_badge_class }}" style="font-size: 0.65rem;">{{ r.get_status_display }}</span>
+                                        </td>
+                                        <td class="text-end">
+                                            <a href="{% url 'attendance:detail' r.pk %}" class="btn btn-outline-secondary btn-sm py-0 px-1" title="View Audit Record">
+                                                <i class="bi bi-eye"></i>
+                                            </a>
+                                        </td>
+                                    </tr>
+                                    {% empty %}
+                                    <tr>
+                                        <td colspan="6" class="text-center py-3 text-muted">No attendance history records in this period.</td>
+                                    </tr>
+                                    {% endfor %}
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    {% empty %}
+    <div class="col-12 text-center py-5">
+        <div class="text-muted mb-2"><i class="bi bi-people fs-1"></i></div>
+        <h6 class="text-dark fw-bold">No Employees Found</h6>
+        <p class="text-muted small">Try modifying search or department filters.</p>
+    </div>
+    {% endfor %}
+</div>
+{% endif %}
+
+<!-- Pagination Controls (Preserves All Filters & View Mode) -->
 {% if page_obj.has_other_pages %}
-<div class="d-flex flex-column flex-sm-row justify-content-between align-items-center gap-2 mt-3">
+<div class="d-flex flex-column flex-sm-row justify-content-between align-items-center gap-2 mt-3 mb-4">
     <div class="text-muted small">
         Showing {{ page_obj.start_index }} to {{ page_obj.end_index }} of {{ page_obj.paginator.count }} entries
     </div>
     <ul class="pagination pagination-sm mb-0">
         {% if page_obj.has_previous %}
-            <li class="page-item"><a class="page-link" href="?page={{ page_obj.previous_page_number }}&q={{ query }}&date_from={{ date_from }}&date_to={{ date_to }}">Previous</a></li>
+            <li class="page-item">
+                <a class="page-link" href="?{% if base_qs %}{{ base_qs }}&{% endif %}page={{ page_obj.previous_page_number }}">Previous</a>
+            </li>
         {% else %}
             <li class="page-item disabled"><span class="page-link">Previous</span></li>
         {% endif %}
@@ -275,12 +895,16 @@
             {% if page_obj.number == num %}
                 <li class="page-item active"><span class="page-link">{{ num }}</span></li>
             {% elif num > page_obj.number|add:'-3' and num < page_obj.number|add:'3' %}
-                <li class="page-item"><a class="page-link" href="?page={{ num }}&q={{ query }}&date_from={{ date_from }}&date_to={{ date_to }}">{{ num }}</a></li>
+                <li class="page-item">
+                    <a class="page-link" href="?{% if base_qs %}{{ base_qs }}&{% endif %}page={{ num }}">{{ num }}</a>
+                </li>
             {% endif %}
         {% endfor %}
 
         {% if page_obj.has_next %}
-            <li class="page-item"><a class="page-link" href="?page={{ page_obj.next_page_number }}&q={{ query }}&date_from={{ date_from }}&date_to={{ date_to }}">Next</a></li>
+            <li class="page-item">
+                <a class="page-link" href="?{% if base_qs %}{{ base_qs }}&{% endif %}page={{ page_obj.next_page_number }}">Next</a>
+            </li>
         {% else %}
             <li class="page-item disabled"><span class="page-link">Next</span></li>
         {% endif %}
@@ -288,4 +912,39 @@
 </div>
 {% endif %}
 
+{% endblock %}
+
+{% block extra_js %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    // Initialize Bootstrap Tooltips for instant, lightweight hover explanations
+    const tooltipTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="tooltip"]'));
+    tooltipTriggerList.map(function (tooltipTriggerEl) {
+        return new bootstrap.Tooltip(tooltipTriggerEl);
+    });
+
+    // Auto-rotate chevron indicators when rows or accordions expand / collapse
+    document.querySelectorAll('.slide-down-trigger').forEach(function(row) {
+        const targetId = row.getAttribute('data-bs-target');
+        if (!targetId) return;
+        const targetCollapse = document.querySelector(targetId);
+        if (!targetCollapse) return;
+
+        targetCollapse.addEventListener('show.bs.collapse', function() {
+            const chevron = row.querySelector('.bi-chevron-down');
+            if (chevron) {
+                chevron.classList.remove('bi-chevron-down');
+                chevron.classList.add('bi-chevron-up');
+            }
+        });
+        targetCollapse.addEventListener('hide.bs.collapse', function() {
+            const chevron = row.querySelector('.bi-chevron-up');
+            if (chevron) {
+                chevron.classList.remove('bi-chevron-up');
+                chevron.classList.add('bi-chevron-down');
+            }
+        });
+    });
+});
+</script>
 {% endblock %}
