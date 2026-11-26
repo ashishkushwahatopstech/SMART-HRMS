@@ -1,5 +1,5 @@
 from decimal import Decimal
-from datetime import datetime, date, timedelta
+from datetime import datetime, date, time, timedelta
 from pathlib import Path
 import json
 import shutil
@@ -1193,6 +1193,7 @@ def api_recognize_face(request):
         now = timezone.now()
         local_now = timezone.localtime(now)
         today = local_now.date()
+        tz = timezone.get_current_timezone()
 
         def format_dt(dt, with_seconds=False):
             if not dt:
@@ -1370,6 +1371,7 @@ def api_recognize_face(request):
         now = timezone.now()
         local_now = timezone.localtime(now)
         today = local_now.date()
+        tz = timezone.get_current_timezone()
         time_display = local_now.strftime('%I:%M %p')
         time_exact_display = local_now.strftime('%I:%M:%S %p')
 
