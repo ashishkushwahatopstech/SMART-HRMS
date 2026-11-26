@@ -1,3 +1,4 @@
+import csv
 from decimal import Decimal
 import calendar
 from django.shortcuts import render, redirect, get_object_or_404
@@ -10,7 +11,7 @@ from django.utils import timezone
 from companies.models import Company
 from employees.models import Employee
 from .models import PayrollRun, Payslip
-from .forms import PayrollRunCreateForm, PayslipPaymentUpdateForm, PayrollFilterForm
+from .forms import PayrollRunCreateForm, PayslipPaymentUpdateForm, PayrollFilterForm, BatchDisbursalForm
 
 
 @login_required
@@ -137,12 +138,238 @@ def payroll_run_detail(request, pk):
             Q(employee__employee_id__icontains=search_q)
         )
 
+    # Shift & Attendance Aggregates across this run
+    all_payslips = run.payslips.all()
+    pending_count = all_payslips.filter(payment_status='pending').count()
+    paid_count = all_payslips.filter(payment_status='paid').count()
+    total_scheduled_hours = all_payslips.aggregate(h=Sum('scheduled_shift_hours'))['h'] or Decimal('0.00')
+    total_worked_hours = all_payslips.aggregate(h=Sum('actual_worked_hours'))['h'] or Decimal('0.00')
+    total_overtime_hours = all_payslips.aggregate(h=Sum('overtime_hours'))['h'] or Decimal('0.00')
+    total_shortfall_hours = all_payslips.aggregate(h=Sum('shortfall_hours'))['h'] or Decimal('0.00')
+
+    batch_form = BatchDisbursalForm(initial={
+        'payment_date': timezone.now().date(),
+        'payment_reference': f"NEFT-{run.company.code}-{run.year}{run.month:02d}"
+    })
+
     context = {
         'run': run,
         'payslips': payslips,
         'search_q': search_q,
+        'pending_count': pending_count,
+        'paid_count': paid_count,
+        'total_scheduled_hours': total_scheduled_hours,
+        'total_worked_hours': total_worked_hours,
+        'total_overtime_hours': total_overtime_hours,
+        'total_shortfall_hours': total_shortfall_hours,
+        'batch_form': batch_form,
     }
     return render(request, 'payroll/payroll_run_detail.html', context)
+
+
+@login_required
+def payroll_run_disburse_batch(request, pk):
+    """
+    HR action to batch disburse all payslips in a payroll run in one bulk operation.
+    Marks all pending payslips as Paid with reference ID and disbursal date.
+    """
+    if request.method != 'POST':
+        return HttpResponseForbidden("Method not allowed")
+
+    user = request.user
+    if not (user.is_super_admin or user.is_hr_admin):
+        raise PermissionDenied("Access restricted to HR and Super Admins.")
+
+    run = PayrollRun.objects.filter(pk=pk).first()
+    if not run:
+        messages.error(request, "Payroll run not found.")
+        return redirect('payroll:dashboard')
+
+    if not user.is_super_admin:
+        employee = getattr(user, 'employee_profile', None)
+        if not employee or run.company_id != employee.company_id:
+            raise PermissionDenied("You can only access payroll runs for your own company.")
+
+    if run.status == PayrollRun.RunStatus.LOCKED:
+        messages.error(request, "This payroll run is locked and cannot be modified.")
+        return redirect('payroll:run_detail', pk=pk)
+
+    mode = request.POST.get('payment_mode', 'bank_transfer')
+    date_str = request.POST.get('payment_date')
+    ref = request.POST.get('payment_reference', '').strip()
+    if not ref:
+        ref = f"NEFT-{run.company.code}-{run.year}{run.month:02d}-{int(timezone.now().timestamp())}"
+
+    p_date = None
+    if date_str:
+        try:
+            p_date = timezone.datetime.strptime(date_str, '%Y-%m-%d').date()
+        except Exception:
+            p_date = timezone.now().date()
+
+    run.disburse_all(payment_mode=mode, payment_date=p_date, payment_reference=ref, user=user)
+    messages.success(request, f"Payroll run for {run.month_display_name} has been marked as DISBURSED! (Reference: {ref}).")
+    return redirect('payroll:run_detail', pk=pk)
+
+
+@login_required
+def payroll_export_bank_transfer(request, pk):
+    """
+    Exports upload-ready corporate banking CSV file (NEFT / RTGS / Direct Debit).
+    """
+    user = request.user
+    if not (user.is_super_admin or user.is_hr_admin):
+        raise PermissionDenied("Access restricted to HR and Super Admins.")
+
+    run = PayrollRun.objects.select_related('company').filter(pk=pk).first()
+    if not run:
+        messages.error(request, "Payroll run not found.")
+        return redirect('payroll:dashboard')
+
+    if not user.is_super_admin:
+        employee = getattr(user, 'employee_profile', None)
+        if not employee or run.company_id != employee.company_id:
+            raise PermissionDenied("Access restricted to your company.")
+
+    payslips = run.payslips.select_related('employee').order_by('employee__employee_id')
+
+    filename = f"Bank_Transfer_{run.company.code}_{run.year}_{run.month:02d}.csv"
+    response = HttpResponse(content_type='text/csv')
+    response['Content-Disposition'] = f'attachment; filename="{filename}"'
+
+    writer = csv.writer(response)
+    writer.writerow([
+        'Beneficiary Account Number',
+        'Beneficiary Name',
+        'IFSC Code',
+        'Bank Name',
+        'Amount (INR)',
+        'Employee ID',
+        'Payment Date',
+        'Narration'
+    ])
+
+    p_date = run.disbursed_at.date().strftime('%d-%m-%Y') if run.disbursed_at else timezone.now().date().strftime('%d-%m-%Y')
+    narration = f"Salary {calendar.month_name[run.month]} {run.year}"
+
+    for p in payslips:
+        acc_no = p.bank_account_number or p.employee.bank_account_number or 'NOT_PROVIDED'
+        ifsc = p.bank_ifsc or p.employee.bank_ifsc_code or 'NOT_PROVIDED'
+        bank_name = p.bank_name or p.employee.bank_name or 'Corporate Bank'
+        writer.writerow([
+            acc_no,
+            p.employee.get_full_name(),
+            ifsc,
+            bank_name,
+            str(p.net_pay),
+            p.employee.employee_id,
+            p_date,
+            narration
+        ])
+
+    return response
+
+
+@login_required
+def payroll_export_salary_register(request, pk):
+    """
+    Exports comprehensive salary register CSV for accounting and audit compliance.
+    """
+    user = request.user
+    if not (user.is_super_admin or user.is_hr_admin):
+        raise PermissionDenied("Access restricted to HR and Super Admins.")
+
+    run = PayrollRun.objects.select_related('company').filter(pk=pk).first()
+    if not run:
+        messages.error(request, "Payroll run not found.")
+        return redirect('payroll:dashboard')
+
+    if not user.is_super_admin:
+        employee = getattr(user, 'employee_profile', None)
+        if not employee or run.company_id != employee.company_id:
+            raise PermissionDenied("Access restricted to your company.")
+
+    payslips = run.payslips.select_related('employee', 'employee__department', 'employee__designation').order_by('employee__employee_id')
+
+    filename = f"Salary_Register_{run.company.code}_{run.year}_{run.month:02d}.csv"
+    response = HttpResponse(content_type='text/csv')
+    response['Content-Disposition'] = f'attachment; filename="{filename}"'
+
+    writer = csv.writer(response)
+    writer.writerow([
+        'Employee ID',
+        'Employee Name',
+        'Department',
+        'Designation',
+        'Assigned Shift',
+        'Daily Shift Hours',
+        'Working Days in Month',
+        'Days Present',
+        'Paid Leaves',
+        'Unpaid LOP Days',
+        'Scheduled Shift Hours',
+        'Actual Worked Hours',
+        'Shortfall Hours',
+        'Overtime Hours',
+        'Hourly Rate',
+        'Basic Salary',
+        'HRA',
+        'Conveyance',
+        'Special Allowance',
+        'Shift Allowance',
+        'Overtime Pay',
+        'Bonus',
+        'Gross Earnings',
+        'Loss of Pay (LOP)',
+        'Provident Fund (EPF)',
+        'ESI',
+        'Professional Tax (PT)',
+        'TDS',
+        'Total Deductions',
+        'Net Pay',
+        'Payment Status',
+        'Payment Mode',
+        'Payment Reference'
+    ])
+
+    for p in payslips:
+        writer.writerow([
+            p.employee.employee_id,
+            p.employee.get_full_name(),
+            p.employee.department.name if p.employee.department else '',
+            p.employee.designation.title if p.employee.designation else '',
+            p.shift_name,
+            str(p.shift_daily_hours),
+            str(p.working_days),
+            str(p.days_present),
+            str(p.paid_leaves),
+            str(p.unpaid_leaves),
+            str(p.scheduled_shift_hours),
+            str(p.actual_worked_hours),
+            str(p.shortfall_hours),
+            str(p.overtime_hours),
+            str(p.hourly_rate),
+            str(p.basic_salary),
+            str(p.hra),
+            str(p.conveyance),
+            str(p.special_allowance),
+            str(p.shift_allowance),
+            str(p.overtime_pay),
+            str(p.bonus),
+            str(p.gross_earnings),
+            str(p.loss_of_pay_deduction),
+            str(p.provident_fund),
+            str(p.esi),
+            str(p.professional_tax),
+            str(p.tds),
+            str(p.total_deductions),
+            str(p.net_pay),
+            p.get_payment_status_display(),
+            p.get_payment_mode_display(),
+            p.payment_reference
+        ])
+
+    return response
 
 
 @login_required

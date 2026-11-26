@@ -21,12 +21,13 @@
     body {
         background-color: #fff !important;
         color: #000 !important;
-        font-size: 12pt;
+        font-size: 11pt;
     }
     .payslip-container {
         border: 2px solid #000 !important;
         padding: 20px !important;
         width: 100% !important;
+        max-width: 100% !important;
     }
 }
 </style>
@@ -56,13 +57,14 @@
             <p class="text-muted small mb-0">Email: {{ payslip.company.email|default:"payroll@smarthrms.local" }} &bull; Phone: {{ payslip.company.phone|default:"+91 22 4567 8900" }}</p>
         </div>
         <div class="col-12 col-sm-4 text-sm-end mt-2 mt-sm-0">
-            <span class="badge bg-light text-dark border px-3 py-2 fs-6">PAYSLIP</span>
+            <span class="badge bg-light text-dark border px-3 py-2 fs-6">CONFIDENTIAL PAYSLIP</span>
             <div class="text-muted small mt-1 fw-bold">{{ payslip.month_name|upper }}</div>
         </div>
     </div>
 
-    <!-- Employee Information Grid -->
+    <!-- Employee & Banking Information Grid -->
     <div class="row g-3 mb-4 pb-3 border-bottom">
+        <!-- Col 1: Employee Particulars -->
         <div class="col-sm-6">
             <table class="table table-sm table-borderless mb-0 small">
                 <tr>
@@ -75,35 +77,55 @@
                 </tr>
                 <tr>
                     <td class="text-muted">Department:</td>
-                    <td>{{ payslip.employee.department.name }}</td>
+                    <td>{{ payslip.employee.department.name|default:"General" }}</td>
                 </tr>
                 <tr>
                     <td class="text-muted">Designation:</td>
-                    <td>{{ payslip.employee.designation.title }}</td>
+                    <td>{{ payslip.employee.designation.title|default:"Staff" }}</td>
+                </tr>
+                <tr>
+                    <td class="text-muted">PAN Number:</td>
+                    <td class="fw-semibold text-dark">{{ payslip.pan_number|default:payslip.employee.pan_number|default:"&mdash;" }}</td>
+                </tr>
+                <tr>
+                    <td class="text-muted">Joining Date:</td>
+                    <td>{{ payslip.employee.joining_date|date:"d M Y"|default:"&mdash;" }}</td>
                 </tr>
             </table>
         </div>
+        <!-- Col 2: Shift & Banking Credentials -->
         <div class="col-sm-6">
             <table class="table table-sm table-borderless mb-0 small">
                 <tr>
-                    <td class="text-muted" style="width: 140px;">Joining Date:</td>
-                    <td>{{ payslip.employee.joining_date|date:"d M Y" }}</td>
+                    <td class="text-muted" style="width: 140px;">Assigned Shift:</td>
+                    <td>
+                        <span class="badge bg-light text-dark border">{{ payslip.shift_name }}</span>
+                        <small class="text-muted ms-1">({{ payslip.shift_daily_hours }} hrs/day)</small>
+                    </td>
                 </tr>
                 <tr>
-                    <td class="text-muted">Assigned Shift:</td>
-                    <td>{{ payslip.employee.assigned_shift_name }}</td>
+                    <td class="text-muted">Bank Name:</td>
+                    <td class="fw-semibold">{{ payslip.bank_name|default:payslip.employee.bank_name|default:"Corporate Bank" }}</td>
+                </tr>
+                <tr>
+                    <td class="text-muted">Bank Account:</td>
+                    <td class="fw-semibold font-monospace">{{ payslip.bank_account_number|default:payslip.employee.bank_account_number|default:"&mdash;" }}</td>
+                </tr>
+                <tr>
+                    <td class="text-muted">IFSC Code:</td>
+                    <td class="fw-semibold font-monospace">{{ payslip.bank_ifsc|default:payslip.employee.bank_ifsc_code|default:"&mdash;" }}</td>
                 </tr>
                 <tr>
                     <td class="text-muted">Payment Mode:</td>
-                    <td>Bank Transfer (NEFT)</td>
+                    <td>{{ payslip.get_payment_mode_display }}</td>
                 </tr>
                 <tr>
-                    <td class="text-muted">Payment Status:</td>
+                    <td class="text-muted">Disbursal Status:</td>
                     <td>
                         {% if payslip.payment_status == 'paid' %}
-                        <span class="badge bg-success">Disbursed ({{ payslip.payment_reference|default:"Direct Transfer" }})</span>
+                        <span class="badge bg-success"><i class="bi bi-check-circle-fill me-1"></i> Disbursed</span>
                         {% else %}
-                        <span class="badge bg-warning text-dark">Pending Disbursal</span>
+                        <span class="badge bg-warning text-dark"><i class="bi bi-hourglass-split me-1"></i> Pending Disbursal</span>
                         {% endif %}
                     </td>
                 </tr>
@@ -111,30 +133,30 @@
         </div>
     </div>
 
-    <!-- Attendance Metrics Row -->
-    <div class="row g-2 text-center mb-2 p-2 bg-light rounded border">
-        <div class="col">
-            <div class="text-muted" style="font-size: 0.75rem;">Calendar Days</div>
-            <div class="fw-bold fs-6">{{ payslip.calendar_days }}</div>
-        </div>
-        <div class="col">
+    <!-- Shift & Working Hours Metrics Row (Enterprise Standard) -->
+    <div class="row g-2 text-center mb-3 p-2 bg-light rounded border">
+        <div class="col-6 col-md">
             <div class="text-muted" style="font-size: 0.75rem;">Working Days</div>
             <div class="fw-bold fs-6">{{ payslip.working_days }}</div>
         </div>
-        <div class="col">
+        <div class="col-6 col-md">
             <div class="text-muted" style="font-size: 0.75rem;">Days Present</div>
             <div class="fw-bold fs-6 text-success">{{ payslip.days_present }}</div>
         </div>
-        <div class="col">
-            <div class="text-muted" style="font-size: 0.75rem;">Paid Leaves</div>
-            <div class="fw-bold fs-6">{{ payslip.paid_leaves }}</div>
+        <div class="col-6 col-md">
+            <div class="text-muted" style="font-size: 0.75rem;">Scheduled Shift Hrs</div>
+            <div class="fw-bold fs-6 text-dark">{{ payslip.scheduled_shift_hours }}h</div>
         </div>
-        <div class="col">
-            <div class="text-muted" style="font-size: 0.75rem;">Unpaid (LOP)</div>
-            <div class="fw-bold fs-6 text-danger">{{ payslip.unpaid_leaves }}</div>
+        <div class="col-6 col-md">
+            <div class="text-muted" style="font-size: 0.75rem;">Actual Worked Hrs</div>
+            <div class="fw-bold fs-6 text-success">{{ payslip.actual_worked_hours }}h</div>
         </div>
-        <div class="col">
-            <div class="text-muted" style="font-size: 0.75rem;">Overtime Hours</div>
+        <div class="col-6 col-md">
+            <div class="text-muted" style="font-size: 0.75rem;">Shortfall (LOP) Hrs</div>
+            <div class="fw-bold fs-6 text-danger">{{ payslip.shortfall_hours }}h</div>
+        </div>
+        <div class="col-6 col-md">
+            <div class="text-muted" style="font-size: 0.75rem;">Overtime Hrs (1.5x)</div>
             <div class="fw-bold fs-6 text-info">{{ payslip.overtime_hours }}h</div>
         </div>
     </div>
@@ -142,14 +164,9 @@
     <!-- Policy & Rate Details Banner -->
     <div class="mb-4 px-3 py-2 bg-white rounded border d-flex flex-wrap justify-content-between align-items-center small text-muted">
         <div>
-            <i class="bi bi-info-circle text-primary me-1"></i>
-            {% if payslip.company.salary_calculation_policy == 'fixed_26_days' or payslip.company.salary_calculation_policy == 'working_hours' %}
-            Policy: <span class="fw-bold text-dark">Fixed 26 Days</span> &bull; Salary calculated on <strong>actual working hours</strong>
-            {% elif payslip.company.salary_calculation_policy == 'fixed_30_days' %}
-            Policy: <span class="fw-bold text-dark">Fixed 30 Days</span> &bull; Based on <strong>attendance marks + in-between Sundays</strong>
-            {% else %}
+            <i class="bi bi-clock-history text-primary me-1"></i>
+            Shift: <span class="fw-bold text-dark">{{ payslip.shift_name }}</span> ({{ payslip.shift_daily_hours }} hrs/shift) &bull;
             Policy: <span class="fw-bold text-dark">{{ payslip.company.get_salary_calculation_policy_display }}</span>
-            {% endif %}
         </div>
         <div class="d-flex gap-3">
             <span>Daily Rate: <strong class="text-dark">&#8377;{{ payslip.per_day_rate }}</strong></span>
@@ -180,6 +197,12 @@
                         <td>Special Allowance</td>
                         <td class="text-end fw-semibold">&#8377;{{ payslip.special_allowance|floatformat:2 }}</td>
                     </tr>
+                    {% if payslip.shift_allowance > 0 %}
+                    <tr class="table-light">
+                        <td>Shift Differential / Night Allowance</td>
+                        <td class="text-end fw-semibold text-primary">&#8377;{{ payslip.shift_allowance|floatformat:2 }}</td>
+                    </tr>
+                    {% endif %}
                     {% if payslip.overtime_pay > 0 %}
                     <tr class="table-info">
                         <td>Overtime Pay ({{ payslip.overtime_hours }} hrs @ 1.5x)</td>
@@ -208,15 +231,15 @@
             <table class="table table-sm table-hover mb-0 small">
                 <tbody>
                     <tr>
-                        <td>Loss of Pay (LOP / Unpaid Days)</td>
+                        <td>Loss of Pay (LOP / Shift Shortfall)</td>
                         <td class="text-end fw-semibold text-danger">&#8377;{{ payslip.loss_of_pay_deduction|floatformat:2 }}</td>
                     </tr>
                     <tr>
-                        <td>Provident Fund (PF)</td>
+                        <td>Provident Fund (EPF 12%)</td>
                         <td class="text-end fw-semibold">&#8377;{{ payslip.provident_fund|floatformat:2 }}</td>
                     </tr>
                     <tr>
-                        <td>Employee State Insurance (ESI)</td>
+                        <td>Employee State Insurance (ESI 0.75%)</td>
                         <td class="text-end fw-semibold">&#8377;{{ payslip.esi|floatformat:2 }}</td>
                     </tr>
                     <tr>
@@ -247,6 +270,22 @@
         <div class="text-muted small fw-semibold">({{ payslip.net_pay_in_words }})</div>
     </div>
 
+    <!-- Corporate Payment Receipt / Bank Transfer Acknowledgment -->
+    {% if payslip.payment_status == 'paid' %}
+    <div class="alert alert-success py-2 px-3 mb-3 small d-flex flex-wrap justify-content-between align-items-center">
+        <div>
+            <i class="bi bi-check-circle-fill text-success me-1"></i>
+            <strong>Payment Disbursed via {{ payslip.get_payment_mode_display }}</strong>
+            {% if payslip.payment_reference %}
+            &bull; UTR / Ref: <code class="fw-bold text-dark">{{ payslip.payment_reference }}</code>
+            {% endif %}
+        </div>
+        <div>
+            Disbursal Date: <strong>{{ payslip.payment_date|date:"d M Y"|default:"Completed" }}</strong>
+        </div>
+    </div>
+    {% endif %}
+
     <!-- Sign-off Disclaimer -->
     <div class="row pt-4 text-muted small border-top">
         <div class="col-6">
@@ -267,16 +306,23 @@
     <form method="post" action="{% url 'payroll:update_payment' payslip.id %}" class="row g-2 align-items-center">
         {% csrf_token %}
         <div class="col-md-3">
+            <label class="form-label small text-muted mb-0">Payment Status</label>
             {{ payment_form.payment_status }}
         </div>
         <div class="col-md-3">
+            <label class="form-label small text-muted mb-0">Payment Mode</label>
+            {{ payment_form.payment_mode }}
+        </div>
+        <div class="col-md-3">
+            <label class="form-label small text-muted mb-0">Disbursal Date</label>
             {{ payment_form.payment_date }}
         </div>
-        <div class="col-md-4">
+        <div class="col-md-3">
+            <label class="form-label small text-muted mb-0">UTR / Ref</label>
             {{ payment_form.payment_reference }}
         </div>
-        <div class="col-md-2">
-            <button type="submit" class="btn btn-primary btn-sm w-100">Update</button>
+        <div class="col-12 text-end mt-2">
+            <button type="submit" class="btn btn-primary btn-sm px-4">Save Payment Record</button>
         </div>
     </form>
 </div>

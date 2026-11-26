@@ -35,12 +35,33 @@ class PayslipPaymentUpdateForm(forms.ModelForm):
     """
     class Meta:
         model = Payslip
-        fields = ['payment_status', 'payment_date', 'payment_reference']
+        fields = ['payment_status', 'payment_mode', 'payment_date', 'payment_reference']
         widgets = {
             'payment_status': forms.Select(attrs={'class': 'form-select'}),
+            'payment_mode': forms.Select(attrs={'class': 'form-select'}),
             'payment_date': forms.DateInput(attrs={'class': 'form-control', 'type': 'date'}),
             'payment_reference': forms.TextInput(attrs={'class': 'form-control', 'placeholder': 'NEFT / UTR / Cheque Ref'}),
         }
+
+
+class BatchDisbursalForm(forms.Form):
+    """
+    Form for HR to disburse the entire monthly payroll run in one bulk action.
+    """
+    payment_mode = forms.ChoiceField(
+        choices=Payslip.PaymentMode.choices,
+        initial=Payslip.PaymentMode.BANK_TRANSFER,
+        widget=forms.Select(attrs={'class': 'form-select'})
+    )
+    payment_date = forms.DateField(
+        initial=timezone.now,
+        widget=forms.DateInput(attrs={'class': 'form-control', 'type': 'date'})
+    )
+    payment_reference = forms.CharField(
+        max_length=100,
+        required=False,
+        widget=forms.TextInput(attrs={'class': 'form-control', 'placeholder': 'e.g. HDFC-NEFT-BATCH202611'})
+    )
 
 
 class PayrollFilterForm(forms.Form):

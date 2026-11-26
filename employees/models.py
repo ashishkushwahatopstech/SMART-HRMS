@@ -221,6 +221,32 @@ class Employee(models.Model):
         help_text="Number of face training frames registered"
     )
 
+    # Banking & Tax Details (For direct corporate payroll disbursal)
+    bank_name = models.CharField(
+        max_length=100,
+        blank=True,
+        default='',
+        help_text="Designated salary deposit bank (e.g. HDFC Bank, ICICI Bank, SBI)"
+    )
+    bank_account_number = models.CharField(
+        max_length=50,
+        blank=True,
+        default='',
+        help_text="Employee bank account number for direct NEFT/RTGS disbursal"
+    )
+    bank_ifsc_code = models.CharField(
+        max_length=25,
+        blank=True,
+        default='',
+        help_text="Bank IFSC code for electronic funds transfer (e.g. HDFC0001234)"
+    )
+    pan_number = models.CharField(
+        max_length=20,
+        blank=True,
+        default='',
+        help_text="Permanent Account Number (PAN) for tax reporting"
+    )
+
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 

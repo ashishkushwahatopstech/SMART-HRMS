@@ -4,41 +4,58 @@
 {% block page_title %}Payroll Register &mdash; {{ run.month_display_name }}{% endblock %}
 
 {% block content %}
-<div class="mb-4">
+<div class="d-flex justify-content-between align-items-center mb-4">
     <a href="{% url 'payroll:dashboard' %}" class="text-decoration-none text-muted small">
         <i class="bi bi-arrow-left me-1"></i> Back to Payroll Dashboard
     </a>
+    <div class="d-flex flex-wrap gap-2">
+        <!-- Corporate Export Actions -->
+        <a href="{% url 'payroll:export_bank_transfer' run.id %}" class="btn btn-outline-success btn-sm shadow-sm" title="Download corporate bank transfer CSV (NEFT/RTGS/Direct Debit format)">
+            <i class="bi bi-bank me-1"></i> Bank Transfer CSV
+        </a>
+        <a href="{% url 'payroll:export_salary_register' run.id %}" class="btn btn-outline-dark btn-sm shadow-sm" title="Download comprehensive salary register CSV for accounting/audit">
+            <i class="bi bi-file-earmark-spreadsheet me-1"></i> Salary Register CSV
+        </a>
+    </div>
 </div>
 
 <!-- Run Summary Header Card -->
 <div class="card card-stat p-4 mb-4">
-    <div class="d-flex flex-column flex-sm-row justify-content-between align-items-start align-items-sm-center gap-3">
+    <div class="d-flex flex-column flex-md-row justify-content-between align-items-start align-items-md-center gap-3">
         <div>
             <div class="d-flex flex-wrap align-items-center gap-2 mb-1">
                 <h4 class="fw-bold mb-0 text-dark">{{ run.month_display_name }} Payroll Register</h4>
-                {% if run.status == 'locked' %}
-                <span class="badge bg-success fs-6"><i class="bi bi-lock-fill me-1"></i> Locked & Finalized</span>
+                {% if run.status == 'disbursed' %}
+                <span class="badge bg-success fs-6"><i class="bi bi-check-circle-fill me-1"></i> Disbursed</span>
+                {% elif run.status == 'locked' %}
+                <span class="badge bg-secondary fs-6"><i class="bi bi-lock-fill me-1"></i> Locked &amp; Finalized</span>
                 {% elif run.status == 'processed' %}
-                <span class="badge bg-primary fs-6">Processed</span>
+                <span class="badge bg-primary fs-6"><i class="bi bi-gear-fill me-1"></i> Processed</span>
                 {% else %}
-                <span class="badge bg-secondary fs-6">Draft</span>
+                <span class="badge bg-warning text-dark fs-6">Draft</span>
                 {% endif %}
             </div>
             <div class="text-muted small">
                 {{ run.company.name }} ({{ run.company.code }}) &bull; Policy: <strong>{{ run.company.get_salary_calculation_policy_display }}</strong>
+                {% if run.disbursal_reference %}
+                &bull; Disbursal Batch: <code class="text-primary fw-bold">{{ run.disbursal_reference }}</code> ({{ run.disbursed_at|date:"d M Y, H:i" }})
+                {% endif %}
             </div>
         </div>
         <div class="d-flex flex-wrap gap-2">
             {% if run.status != 'locked' %}
             <form method="post" action="{% url 'payroll:run_recalculate' run.id %}" class="d-inline">
                 {% csrf_token %}
-                <button type="submit" class="btn btn-outline-primary btn-sm shadow-sm" onclick="return confirm('Recalculate all employee payslips for this month?');">
-                    <i class="bi bi-arrow-clockwise me-1"></i> Recalculate Run
+                <button type="submit" class="btn btn-outline-primary btn-sm shadow-sm" onclick="return confirm('Recalculate all employee payslips based on latest attendance and shift logs?');">
+                    <i class="bi bi-arrow-clockwise me-1"></i> Recalculate
                 </button>
             </form>
+            <button type="button" class="btn btn-success btn-sm shadow-sm" data-bs-toggle="modal" data-bs-target="#batchDisbursalModal">
+                <i class="bi bi-cash-stack me-1"></i> Disburse Payroll
+            </button>
             <form method="post" action="{% url 'payroll:run_lock' run.id %}" class="d-inline">
                 {% csrf_token %}
-                <button type="submit" class="btn btn-success btn-sm shadow-sm" onclick="return confirm('Are you sure you want to LOCK this payroll run? It cannot be recalculated once locked.');">
+                <button type="submit" class="btn btn-outline-danger btn-sm shadow-sm" onclick="return confirm('Are you sure you want to LOCK this payroll run? It cannot be recalculated or batch disbursed once locked.');">
                     <i class="bi bi-lock-fill me-1"></i> Lock Payroll
                 </button>
             </form>
@@ -48,7 +65,8 @@
 
     <hr class="my-3">
 
-    <div class="row g-3 text-center">
+    <!-- Financial Aggregates -->
+    <div class="row g-3 text-center mb-3">
         <div class="col-6 col-md-3">
             <div class="text-muted small">Total Employees</div>
             <div class="fs-4 fw-bold text-dark mt-1">{{ run.total_employees }}</div>
@@ -64,6 +82,39 @@
         <div class="col-6 col-md-3">
             <div class="text-muted small">Total Net Pay Disbursed</div>
             <div class="fs-4 fw-bold text-success mt-1">&#8377;{{ run.total_net_pay|floatformat:2 }}</div>
+        </div>
+    </div>
+
+    <!-- Shift & Working Hours Industry Standard Metrics Bar -->
+    <div class="p-3 bg-light rounded border">
+        <div class="row g-3 text-center align-items-center">
+            <div class="col-6 col-md-3 border-end-md">
+                <div class="text-muted small"><i class="bi bi-clock-history me-1 text-primary"></i> Scheduled Shift Hours</div>
+                <div class="fw-bold fs-5 text-dark mt-1">{{ total_scheduled_hours|floatformat:1 }} <small class="text-muted fs-6">hrs</small></div>
+            </div>
+            <div class="col-6 col-md-3 border-end-md">
+                <div class="text-muted small"><i class="bi bi-check2-circle me-1 text-success"></i> Actual Worked Hours</div>
+                <div class="fw-bold fs-5 text-success mt-1">{{ total_worked_hours|floatformat:1 }} <small class="text-muted fs-6">hrs</small></div>
+            </div>
+            <div class="col-6 col-md-3 border-end-md">
+                <div class="text-muted small"><i class="bi bi-lightning-charge me-1 text-info"></i> Total Overtime Hours</div>
+                <div class="fw-bold fs-5 text-info mt-1">{{ total_overtime_hours|floatformat:1 }} <small class="text-muted fs-6">hrs</small></div>
+            </div>
+            <div class="col-6 col-md-3">
+                <div class="text-muted small"><i class="bi bi-exclamation-triangle me-1 text-danger"></i> Total Shortfall (LOP) Hours</div>
+                <div class="fw-bold fs-5 text-danger mt-1">{{ total_shortfall_hours|floatformat:1 }} <small class="text-muted fs-6">hrs</small></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Disbursal Status Progress Bar -->
+    <div class="mt-3">
+        <div class="d-flex justify-content-between align-items-center small text-muted mb-1">
+            <span><strong>Disbursal Progress:</strong> {{ paid_count }} of {{ run.total_employees }} employees paid</span>
+            <span>{% if run.total_employees > 0 %}{% widthratio paid_count run.total_employees 100 %}%{% else %}0%{% endif %} Completed</span>
+        </div>
+        <div class="progress" style="height: 8px;">
+            <div class="progress-bar bg-success" role="progressbar" style="width: {% if run.total_employees > 0 %}{% widthratio paid_count run.total_employees 100 %}%{% else %}0%{% endif %};" aria-valuenow="{{ paid_count }}" aria-valuemin="0" aria-valuemax="{{ run.total_employees }}"></div>
         </div>
     </div>
 </div>
@@ -95,14 +146,15 @@
             <thead class="table-light">
                 <tr>
                     <th>Employee</th>
-                    <th>Designation</th>
-                    <th>Working / Present</th>
-                    <th>LOP Days</th>
+                    <th>Assigned Shift</th>
+                    <th>Attendance</th>
+                    <th>Shift Hours (Sched vs Work)</th>
+                    <th>Shortfall (LOP)</th>
                     <th>Overtime</th>
-                    <th>Gross Salary</th>
-                    <th>Total Deductions</th>
-                    <th>Net Pay</th>
-                    <th>Status</th>
+                    <th>Gross</th>
+                    <th>Deductions</th>
+                    <th>Net Payable</th>
+                    <th>Disbursal</th>
                     <th class="text-end">Actions</th>
                 </tr>
             </thead>
@@ -111,28 +163,39 @@
                 <tr>
                     <td>
                         <div class="fw-bold text-dark">{{ p.employee.get_full_name }}</div>
-                        <small class="text-muted">{{ p.employee.employee_id }}</small>
+                        <small class="text-muted">{{ p.employee.employee_id }} &bull; {{ p.employee.department.name|default:"General" }}</small>
                     </td>
                     <td>
-                        <span class="small">{{ p.employee.designation.title }}</span>
-                        <small class="text-muted d-block">{{ p.employee.department.name }}</small>
+                        <span class="badge bg-light text-dark border">{{ p.shift_name }}</span>
+                        <small class="text-muted d-block mt-1">{{ p.shift_daily_hours }} hrs/day</small>
                     </td>
                     <td>
-                        <span class="fw-semibold">{{ p.days_present }}</span> / {{ p.working_days }}
+                        <span class="fw-semibold">{{ p.days_present }}</span> / {{ p.working_days }}d
                         {% if p.paid_leaves > 0 %}
                         <small class="text-success d-block">+{{ p.paid_leaves }} paid leaves</small>
                         {% endif %}
                     </td>
                     <td>
-                        {% if p.unpaid_leaves > 0 %}
-                        <span class="badge bg-danger">{{ p.unpaid_leaves }}d (&#8377;{{ p.loss_of_pay_deduction }})</span>
+                        <div class="small">
+                            <span class="fw-semibold text-success">{{ p.actual_worked_hours }}h</span>
+                            <span class="text-muted">/ {{ p.scheduled_shift_hours }}h</span>
+                        </div>
+                        <small class="text-muted">Rate: &#8377;{{ p.hourly_rate }}/h</small>
+                    </td>
+                    <td>
+                        {% if p.shortfall_hours > 0 or p.unpaid_leaves > 0 %}
+                        <span class="badge bg-danger text-wrap" style="font-size: 0.75rem;">
+                            {{ p.shortfall_hours }}h (-&#8377;{{ p.loss_of_pay_deduction }})
+                        </span>
                         {% else %}
                         <span class="text-muted">&mdash;</span>
                         {% endif %}
                     </td>
                     <td>
                         {% if p.overtime_hours > 0 %}
-                        <span class="badge bg-info text-dark">{{ p.overtime_hours }}h (&#8377;{{ p.overtime_pay }})</span>
+                        <span class="badge bg-info text-dark">
+                            +{{ p.overtime_hours }}h (+&#8377;{{ p.overtime_pay }})
+                        </span>
                         {% else %}
                         <span class="text-muted">&mdash;</span>
                         {% endif %}
@@ -142,20 +205,25 @@
                     <td class="text-success fw-bold fs-6">&#8377;{{ p.net_pay|floatformat:2 }}</td>
                     <td>
                         {% if p.payment_status == 'paid' %}
-                        <span class="badge bg-success">Paid</span>
+                        <span class="badge bg-success"><i class="bi bi-check me-1"></i>Paid</span>
+                        {% if p.payment_reference %}
+                        <small class="text-muted d-block text-truncate" style="max-width: 110px;" title="{{ p.payment_reference }}">
+                            {{ p.payment_reference }}
+                        </small>
+                        {% endif %}
                         {% else %}
                         <span class="badge bg-warning text-dark">Pending</span>
                         {% endif %}
                     </td>
                     <td class="text-end">
-                        <a href="{% url 'payroll:payslip_detail' p.id %}" class="btn btn-sm btn-outline-primary shadow-sm" title="View & Print Payslip">
+                        <a href="{% url 'payroll:payslip_detail' p.id %}" class="btn btn-sm btn-outline-primary shadow-sm" title="View &amp; Print Payslip">
                             <i class="bi bi-file-earmark-text me-1"></i> Payslip
                         </a>
                     </td>
                 </tr>
                 {% empty %}
                 <tr>
-                    <td colspan="10" class="text-center py-4 text-muted">
+                    <td colspan="11" class="text-center py-4 text-muted">
                         No payslips found matching the query.
                     </td>
                 </tr>
@@ -164,4 +232,57 @@
         </table>
     </div>
 </div>
+
+<!-- Modal: Batch Disburse Payroll -->
+{% if run.status != 'locked' %}
+<div class="modal fade" id="batchDisbursalModal" tabindex="-1" aria-labelledby="batchDisbursalModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <form method="post" action="{% url 'payroll:run_disburse' run.id %}">
+                {% csrf_token %}
+                <div class="modal-header bg-success text-white">
+                    <h5 class="modal-title fw-bold" id="batchDisbursalModalLabel">
+                        <i class="bi bi-cash-coin me-1"></i> Execute Batch Payroll Disbursal
+                    </h5>
+                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body p-4">
+                    <div class="alert alert-info py-2 small mb-3">
+                        <i class="bi bi-info-circle-fill me-1"></i>
+                        This action will mark all <strong>{{ pending_count }} pending payslips</strong> in this run as <strong>PAID</strong> and generate corporate payment receipt records.
+                    </div>
+
+                    <div class="card bg-light p-3 border mb-3 text-center">
+                        <div class="text-muted small fw-bold text-uppercase">Total Amount to Disburse</div>
+                        <div class="fs-3 fw-bold text-success my-1">&#8377;{{ run.total_net_pay|floatformat:2 }}</div>
+                        <div class="text-muted small">{{ run.total_employees }} Employees &bull; Month: {{ run.month_display_name }}</div>
+                    </div>
+
+                    <div class="mb-3">
+                        <label class="form-label fw-semibold small">Payment Mode</label>
+                        {{ batch_form.payment_mode }}
+                    </div>
+
+                    <div class="mb-3">
+                        <label class="form-label fw-semibold small">Disbursal / Value Date</label>
+                        {{ batch_form.payment_date }}
+                    </div>
+
+                    <div class="mb-3">
+                        <label class="form-label fw-semibold small">Batch Reference / UTR Number</label>
+                        {{ batch_form.payment_reference }}
+                        <small class="text-muted">Unique corporate banking batch reference or NEFT/RTGS transaction UTR.</small>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                    <button type="submit" class="btn btn-success fw-bold px-4">
+                        <i class="bi bi-check2-circle me-1"></i> Confirm &amp; Disburse All
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+{% endif %}
 {% endblock %}

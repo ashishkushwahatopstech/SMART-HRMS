@@ -107,6 +107,12 @@ def compute_monthly_payroll(employee, year, month):
     monthly_salary = employee.monthly_salary or Decimal('0.00')
     expected_daily_hours = employee.working_hours_per_day or company.default_working_hours or Decimal('8.00')
 
+    # Shift configuration (Enterprise Shift-Hour Standard)
+    shift = getattr(employee, 'assigned_shift', None)
+    shift_name = employee.assigned_shift_name if employee.assigned_shift_name else (shift.name if shift else "Standard Shift")
+    shift_daily_hours = Decimal(str(shift.total_expected_hours)) if (shift and shift.total_expected_hours and shift.total_expected_hours > 0) else expected_daily_hours
+    scheduled_shift_hours = (Decimal(str(actual_working_days)) * shift_daily_hours).quantize(Decimal('0.01'))
+
     # 2. Determine per-day rate divisor and base working days
     if policy == Company.SalaryCalculationPolicy.FIXED_30_DAYS:
         divisor = Decimal('30.00')
@@ -160,11 +166,13 @@ def compute_monthly_payroll(employee, year, month):
             total_worked_hours += att.total_working_hours
         elif att.check_in_time and att.check_out_time:
             diff_secs = (att.check_out_time - att.check_in_time).total_seconds()
-            total_worked_hours += Decimal(str(round(max(0.0, diff_secs / 3600.0), 2)))
+            lunch_secs = (att.total_lunch_duration_minutes * 60) if att.total_lunch_duration_minutes else 0
+            net_secs = max(0.0, diff_secs - lunch_secs)
+            total_worked_hours += Decimal(str(round(net_secs / 3600.0, 2)))
         elif att.status in [Attendance.AttendanceStatus.PRESENT, Attendance.AttendanceStatus.LATE]:
-            total_worked_hours += expected_daily_hours
+            total_worked_hours += shift_daily_hours
         elif att.status == Attendance.AttendanceStatus.HALF_DAY:
-            total_worked_hours += (expected_daily_hours / Decimal('2.0'))
+            total_worked_hours += (shift_daily_hours / Decimal('2.0'))
 
     # 4. Leave applications for the month
     leaves_qs = LeaveApplication.objects.filter(
@@ -198,6 +206,13 @@ def compute_monthly_payroll(employee, year, month):
 
     # 5. Policy-Specific Computation (30 Days vs 26 Days / Working Hours vs Actual Working Days)
     sundays_included_count = Decimal('0.00')
+    shortfall_hours = Decimal('0.00')
+
+    # Shift Allowance (Night shift differential if shift is overnight)
+    shift_allowance = Decimal('0.00')
+    if shift and getattr(shift, 'is_overnight', False):
+        night_days = full_days_count + half_days_count
+        shift_allowance = (night_days * Decimal('150.00')).quantize(Decimal('0.01'))
 
     if policy == Company.SalaryCalculationPolicy.FIXED_30_DAYS:
         # PUNCH DATES in this month
@@ -247,19 +262,20 @@ def compute_monthly_payroll(employee, year, month):
         total_lop_days = max(Decimal('0.00'), Decimal('30.00') - total_paid_days)
         lop_deduction = (total_lop_days * per_day_rate).quantize(Decimal('0.01'))
         days_present = attended_days + sundays_included_count
+        shortfall_hours = (total_lop_days * shift_daily_hours).quantize(Decimal('0.01'))
 
     elif policy in [Company.SalaryCalculationPolicy.FIXED_26_DAYS, Company.SalaryCalculationPolicy.WORKING_HOURS]:
-        # Calculate salary directly based on employee's total working hours
-        total_expected_hours = (Decimal('26.00') * expected_daily_hours).quantize(Decimal('0.01'))
-        paid_leave_hours = (paid_leave_days * expected_daily_hours).quantize(Decimal('0.01'))
+        # Calculate salary directly based on employee's total working hours into their shift
+        total_expected_hours = (Decimal('26.00') * shift_daily_hours).quantize(Decimal('0.01'))
+        paid_leave_hours = (paid_leave_days * shift_daily_hours).quantize(Decimal('0.01'))
         total_credited_hours = total_worked_hours + paid_leave_hours
 
-        shortfall_hours = max(Decimal('0.00'), total_expected_hours - total_credited_hours)
+        shortfall_hours = max(Decimal('0.00'), total_expected_hours - total_credited_hours).quantize(Decimal('0.01'))
         lop_deduction = (shortfall_hours * hourly_rate).quantize(Decimal('0.01'))
 
         # Effective days present and LOP days for reporting
-        effective_days_present = (total_worked_hours / expected_daily_hours).quantize(Decimal('0.01'))
-        effective_lop_days = (shortfall_hours / expected_daily_hours).quantize(Decimal('0.01'))
+        effective_days_present = (total_worked_hours / shift_daily_hours).quantize(Decimal('0.01'))
+        effective_lop_days = (shortfall_hours / shift_daily_hours).quantize(Decimal('0.01'))
 
         days_present = effective_days_present
         total_lop_days = effective_lop_days
@@ -268,6 +284,7 @@ def compute_monthly_payroll(employee, year, month):
         # ACTUAL_WORKING_DAYS
         total_lop_days = unpaid_leave_days + unexcused_absent_days
         lop_deduction = (total_lop_days * per_day_rate).quantize(Decimal('0.01'))
+        shortfall_hours = (total_lop_days * shift_daily_hours).quantize(Decimal('0.01'))
         days_present = attended_days
 
     # 6. Earnings Breakdown
@@ -278,7 +295,7 @@ def compute_monthly_payroll(employee, year, month):
 
     overtime_pay = (total_ot_hours * hourly_rate * Decimal('1.50')).quantize(Decimal('0.01'))
     bonus = Decimal('0.00')
-    gross_earnings = (monthly_salary + overtime_pay + bonus).quantize(Decimal('0.01'))
+    gross_earnings = (monthly_salary + overtime_pay + shift_allowance + bonus).quantize(Decimal('0.01'))
 
     # 7. Statutory Deductions based on earned compensation
     earned_gross = max(Decimal('0.00'), gross_earnings - lop_deduction)
@@ -341,4 +358,16 @@ def compute_monthly_payroll(employee, year, month):
         'net_pay_in_words': net_pay_words,
         'sundays_included': sundays_included_count,
         'total_worked_hours': total_worked_hours,
+        # Shift & Working Hours Metrics (Enterprise Standard)
+        'shift_name': shift_name,
+        'shift_daily_hours': shift_daily_hours,
+        'scheduled_shift_hours': scheduled_shift_hours,
+        'actual_worked_hours': total_worked_hours,
+        'shortfall_hours': shortfall_hours,
+        'shift_allowance': shift_allowance,
+        # Employee Banking & Statutory Snapshots
+        'bank_name': getattr(employee, 'bank_name', '') or '',
+        'bank_account_number': getattr(employee, 'bank_account_number', '') or '',
+        'bank_ifsc': getattr(employee, 'bank_ifsc_code', '') or '',
+        'pan_number': getattr(employee, 'pan_number', '') or '',
     }

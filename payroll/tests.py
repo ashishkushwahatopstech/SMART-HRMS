@@ -1,14 +1,16 @@
 from decimal import Decimal
-from datetime import date
+from datetime import date, time, datetime
 from django.test import TestCase, Client
 from django.urls import reverse
 from django.db import IntegrityError, transaction
+from django.utils import timezone
 from accounts.models import User
 from companies.models import Company
 from employees.models import Department, Designation, Employee
 from holidays.models import Holiday
 from leaves.models import LeaveType, LeaveBalance, LeaveApplication
 from attendance.models import Attendance
+from shifts.models import Shift
 from payroll.models import PayrollRun, Payslip
 from payroll.engine import compute_monthly_payroll, number_to_words_inr
 
@@ -382,3 +384,133 @@ class PayrollEngineTests(TestCase):
         # Forbidden from viewing senior dev's payslip
         resp_other = self.client.get(reverse('payroll:payslip_detail', args=[senior_payslip.id]))
         self.assertEqual(resp_other.status_code, 403)
+
+    def test_shift_hour_calculation_with_lunch_deduction_and_overtime(self):
+        """
+        Tests enterprise shift scheduled hours vs actual punch hours with lunch deduction:
+        - Shift: 9:00 to 17:00 (8.0h daily), 60 min lunch
+        - Biometric punch: 09:00 to 19:00 (10 hrs elapsed) - 60 min lunch = 9.0 worked hours
+        - Overtime = 1.0 hour @ 1.5x hourly rate
+        """
+        shift = Shift.objects.create(
+            company=self.company_a,
+            name="General Morning Shift",
+            shift_code="GMS-0917",
+            start_time=time(9, 0),
+            end_time=time(17, 0),
+            lunch_duration_minutes=60
+        )
+        self.trainee.assigned_shift = shift
+        self.trainee.assigned_shift_name = shift.name
+        self.trainee.bank_name = "HDFC Bank"
+        self.trainee.bank_account_number = "50100234567890"
+        self.trainee.bank_ifsc_code = "HDFC0001234"
+        self.trainee.pan_number = "ABCDE1234F"
+        self.trainee.save()
+
+        Attendance.objects.create(
+            employee=self.trainee,
+            company=self.company_a,
+            date=date(2026, 1, 5),
+            status=Attendance.AttendanceStatus.PRESENT,
+            check_in_time=timezone.make_aware(datetime(2026, 1, 5, 9, 0, 0)),
+            check_out_time=timezone.make_aware(datetime(2026, 1, 5, 19, 0, 0)),
+            total_lunch_duration_minutes=60
+        )
+
+        payroll = compute_monthly_payroll(self.trainee, 2026, 1)
+        self.assertEqual(payroll['shift_name'], "General Morning Shift")
+        self.assertEqual(payroll['shift_daily_hours'], Decimal('8.00'))
+        self.assertEqual(payroll['scheduled_shift_hours'], Decimal('168.00'))  # 21 working days * 8h
+        self.assertEqual(payroll['actual_worked_hours'], Decimal('9.00'))
+        self.assertEqual(payroll['overtime_hours'], Decimal('1.00'))
+        self.assertAlmostEqual(float(payroll['overtime_pay']), 80.36, places=1)
+        self.assertEqual(payroll['bank_name'], "HDFC Bank")
+        self.assertEqual(payroll['bank_account_number'], "50100234567890")
+        self.assertEqual(payroll['bank_ifsc'], "HDFC0001234")
+        self.assertEqual(payroll['pan_number'], "ABCDE1234F")
+
+    def test_batch_disbursal_action_and_status_transition(self):
+        """Tests HR one-click batch disbursal of all payslips in a payroll run."""
+        run = PayrollRun.objects.create(
+            company=self.company_a,
+            year=2026,
+            month=1
+        )
+        run.generate_payslips(self.superadmin)
+        self.assertEqual(run.payslips.filter(payment_status='pending').count(), 3)
+
+        self.client.login(username='hr_alpha', password='password123')
+        resp = self.client.post(reverse('payroll:run_disburse', args=[run.id]), {
+            'payment_mode': 'bank_transfer',
+            'payment_date': '2026-02-01',
+            'payment_reference': 'NEFT-ALPHA-202601-BATCH'
+        })
+        self.assertEqual(resp.status_code, 302)
+
+        run.refresh_from_db()
+        self.assertEqual(run.status, PayrollRun.RunStatus.DISBURSED)
+        self.assertEqual(run.disbursal_reference, 'NEFT-ALPHA-202601-BATCH')
+        self.assertEqual(run.payment_mode, 'bank_transfer')
+        self.assertEqual(run.payslips.filter(payment_status='paid').count(), 3)
+        self.assertEqual(run.payslips.filter(payment_status='pending').count(), 0)
+
+    def test_corporate_bank_transfer_csv_export(self):
+        """Tests download of upload-ready corporate banking CSV file."""
+        self.trainee.bank_name = "HDFC Bank"
+        self.trainee.bank_account_number = "50100234567890"
+        self.trainee.bank_ifsc_code = "HDFC0001234"
+        self.trainee.save()
+
+        run = PayrollRun.objects.create(company=self.company_a, year=2026, month=1)
+        run.generate_payslips(self.superadmin)
+
+        self.client.login(username='hr_alpha', password='password123')
+        resp = self.client.get(reverse('payroll:export_bank_transfer', args=[run.id]))
+        self.assertEqual(resp.status_code, 200)
+        self.assertEqual(resp['Content-Type'], 'text/csv')
+
+        content = resp.content.decode('utf-8')
+        self.assertIn('Beneficiary Account Number', content)
+        self.assertIn('50100234567890', content)
+        self.assertIn('HDFC0001234', content)
+        self.assertIn('Neha Rao', content)
+
+    def test_salary_register_csv_export(self):
+        """Tests download of comprehensive enterprise salary register CSV."""
+        run = PayrollRun.objects.create(company=self.company_a, year=2026, month=1)
+        run.generate_payslips(self.superadmin)
+
+        self.client.login(username='hr_alpha', password='password123')
+        resp = self.client.get(reverse('payroll:export_salary_register', args=[run.id]))
+        self.assertEqual(resp.status_code, 200)
+        self.assertEqual(resp['Content-Type'], 'text/csv')
+
+        content = resp.content.decode('utf-8')
+        self.assertIn('Scheduled Shift Hours', content)
+        self.assertIn('Actual Worked Hours', content)
+        self.assertIn('Shortfall Hours', content)
+        self.assertIn('Overtime Hours', content)
+        self.assertIn('Net Pay', content)
+
+    def test_multi_company_disbursal_and_export_isolation(self):
+        """Tests that HR Admin of Company A cannot disburse or export payroll for Company B."""
+        run_b = PayrollRun.objects.create(company=self.company_b, year=2026, month=1)
+        run_b.generate_payslips(self.superadmin)
+
+        self.client.login(username='hr_alpha', password='password123')
+
+        # Attempt batch disbursal on Company B run -> 403 Forbidden
+        resp_disburse = self.client.post(reverse('payroll:run_disburse', args=[run_b.id]), {
+            'payment_mode': 'bank_transfer',
+            'payment_reference': 'ILLEGAL-REF'
+        })
+        self.assertEqual(resp_disburse.status_code, 403)
+
+        # Attempt bank transfer export on Company B run -> 403 Forbidden
+        resp_bank = self.client.get(reverse('payroll:export_bank_transfer', args=[run_b.id]))
+        self.assertEqual(resp_bank.status_code, 403)
+
+        # Attempt salary register export on Company B run -> 403 Forbidden
+        resp_reg = self.client.get(reverse('payroll:export_salary_register', args=[run_b.id]))
+        self.assertEqual(resp_reg.status_code, 403)

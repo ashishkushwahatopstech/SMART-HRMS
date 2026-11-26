@@ -61,6 +61,10 @@ class EmployeeForm(forms.ModelForm):
             'address',
             'emergency_contact_name',
             'emergency_contact_phone',
+            'bank_name',
+            'bank_account_number',
+            'bank_ifsc_code',
+            'pan_number',
         ]
         widgets = {
             'company': forms.Select(attrs={'class': 'form-select', 'id': 'id_company'}),
@@ -88,6 +92,10 @@ class EmployeeForm(forms.ModelForm):
             'address': forms.Textarea(attrs={'class': 'form-control', 'rows': 2, 'placeholder': 'Residential address...'}),
             'emergency_contact_name': forms.TextInput(attrs={'class': 'form-control', 'placeholder': 'Emergency Contact Person'}),
             'emergency_contact_phone': forms.TextInput(attrs={'class': 'form-control', 'placeholder': 'Emergency Contact Number'}),
+            'bank_name': forms.TextInput(attrs={'class': 'form-control', 'placeholder': 'e.g. HDFC Bank, SBI, ICICI'}),
+            'bank_account_number': forms.TextInput(attrs={'class': 'form-control', 'placeholder': 'e.g. 50100234567890'}),
+            'bank_ifsc_code': forms.TextInput(attrs={'class': 'form-control', 'placeholder': 'e.g. HDFC0001234'}),
+            'pan_number': forms.TextInput(attrs={'class': 'form-control', 'placeholder': 'e.g. ABCDE1234F'}),
         }
 
     def __init__(self, *args, **kwargs):
